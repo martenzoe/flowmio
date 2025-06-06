@@ -6,9 +6,9 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import BusinessplanIntro from "./generator/BusinessplanIntro";
 import GeneratorLayout from "./generator/GeneratorLayout";
-import Kapitel1 from "./generator/Kapitel1";
-import Deckblatt from "./generator/Deckblatt";  // Importiere weitere Kapitel hier
-
+import Deckblatt from "./generator/Deckblatt";
+import Zusammenfassung from "./generator/zusammenfassung";
+// import weitere Kapitel nach Bedarf
 
 export default function App() {
   return (
@@ -21,11 +21,12 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/businessplan" element={<BusinessplanIntro />} />
 
+        {/* Generator mit Nested Routes */}
         <Route path="/businessplan/start" element={<GeneratorLayout />}>
-        <Route path="/businessplan/start/kapitel1" element={<Deckblatt />} />
-        <Route path="kapitel1" element={<Kapitel1 />} />
+          <Route path="deckblatt" element={<Deckblatt />} />
+          <Route path="zusammenfassung" element={<Zusammenfassung />} />
+          {/* Hier weitere Kapitel */}
         </Route>
-        {/* Später: Dashboard, FAQ, Kontakt usw. */}
       </Routes>
     </Router>
   );
