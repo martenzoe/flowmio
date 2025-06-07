@@ -8,6 +8,7 @@ import BusinessplanIntro from "./generator/BusinessplanIntro";
 import GeneratorLayout from "./generator/GeneratorLayout";
 import Deckblatt from "./generator/Deckblatt";
 import Zusammenfassung from "./generator/zusammenfassung";
+import ProfileSetup from "./pages/ProfileSetup";
 // import weitere Kapitel nach Bedarf
 
 export default function App() {
@@ -16,6 +17,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/profil/setup" element={<ProfileSetup />} />
+
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
