@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 
@@ -9,24 +8,33 @@ const avatarOptions = [
   "/avatars/cat3.png",
 ];
 
-export default function ProfileSetup() {
-  const { user } = useCurrentUser();
-  const navigate = useNavigate();
-
+export default function ProfileEdit() {
+  const { user, profile, refreshUser } = useCurrentUser();
   const [form, setForm] = useState({
     vorname: "",
     nachname: "",
     nickname: "",
     telefon: "",
     adresse: "",
-    plz: "",
-    ort: "",
     land: "",
     avatar_url: "",
-    dsgvo_accept: false,
   });
-
   const [customAvatar, setCustomAvatar] = useState(null);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (profile) {
+      setForm({
+        vorname: profile.vorname || "",
+        nachname: profile.nachname || "",
+        nickname: profile.nickname || "",
+        telefon: profile.telefon || "",
+        adresse: profile.adresse || "",
+        land: profile.land || "",
+        avatar_url: profile.avatar_url || "",
+      });
+    }
+  }, [profile]);
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -35,7 +43,6 @@ export default function ProfileSetup() {
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file || !user?.id) return;
-
     if (file.size > 2 * 1024 * 1024) {
       alert("Die Datei darf maximal 2 MB groß sein.");
       return;
@@ -56,39 +63,31 @@ export default function ProfileSetup() {
   };
 
   const handleSubmit = async () => {
-    if (!form.vorname || !form.nachname || !form.nickname || !form.dsgvo_accept) {
-      alert("Bitte alle Pflichtfelder ausfüllen und DSGVO akzeptieren.");
-      return;
-    }
-
-    const { error } = await supabase.from("profiles").upsert({
-      id: user.id,
-      ...form,
-    });
+    const { error } = await supabase
+      .from("profiles")
+      .update({ ...form })
+      .eq("id", user.id);
 
     if (error) {
-      console.error("❌ Fehler beim Speichern:", error);
-      alert("Speichern fehlgeschlagen.");
-      return;
+      console.error("Fehler beim Speichern:", error);
+      setMessage("❌ Fehler beim Speichern.");
+    } else {
+      await refreshUser();
+      setMessage("✅ Profil erfolgreich aktualisiert.");
     }
-
-    // harter Reload für frische Daten in useCurrentUser
-    window.location.href = "/dashboard";
   };
 
   return (
     <div className="max-w-3xl mx-auto bg-white p-10 rounded-xl shadow mt-12">
-      <h1 className="text-2xl font-bold mb-6">Profil anlegen</h1>
+      <h1 className="text-2xl font-bold mb-6">Profil bearbeiten</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="Vorname*" value={form.vorname} onChange={(v) => handleChange("vorname", v)} />
-        <Input label="Nachname*" value={form.nachname} onChange={(v) => handleChange("nachname", v)} />
-        <Input label="Nickname*" value={form.nickname} onChange={(v) => handleChange("nickname", v)} />
-        <Input label="Telefon (optional)" value={form.telefon} onChange={(v) => handleChange("telefon", v)} />
-        <Input label="Adresse (optional)" value={form.adresse} onChange={(v) => handleChange("adresse", v)} />
-        <Input label="PLZ (optional)" value={form.plz} onChange={(v) => handleChange("plz", v)} />
-        <Input label="Ort (optional)" value={form.ort} onChange={(v) => handleChange("ort", v)} />
-        <Input label="Land (optional)" value={form.land} onChange={(v) => handleChange("land", v)} />
+        <Input label="Vorname" value={form.vorname} onChange={(v) => handleChange("vorname", v)} />
+        <Input label="Nachname" value={form.nachname} onChange={(v) => handleChange("nachname", v)} />
+        <Input label="Nickname" value={form.nickname} onChange={(v) => handleChange("nickname", v)} />
+        <Input label="Telefon" value={form.telefon} onChange={(v) => handleChange("telefon", v)} />
+        <Input label="Adresse" value={form.adresse} onChange={(v) => handleChange("adresse", v)} />
+        <Input label="Land" value={form.land} onChange={(v) => handleChange("land", v)} />
       </div>
 
       <div className="mt-6">
@@ -107,22 +106,12 @@ export default function ProfileSetup() {
         </div>
 
         <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Oder eigenes Profilbild hochladen</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Oder eigenes Bild hochladen (max. 2MB)
+          </label>
           <input type="file" accept="image/*" onChange={handleFileUpload} />
           {customAvatar && <img src={customAvatar} className="mt-2 h-16 rounded-full" />}
         </div>
-      </div>
-
-      <div className="mt-6">
-        <label className="inline-flex items-center text-sm">
-          <input
-            type="checkbox"
-            checked={form.dsgvo_accept}
-            onChange={(e) => handleChange("dsgvo_accept", e.target.checked)}
-            className="mr-2"
-          />
-          Ich stimme der Datenschutzerklärung (DSGVO) zu*
-        </label>
       </div>
 
       <div className="mt-6 text-right">
@@ -130,8 +119,9 @@ export default function ProfileSetup() {
           onClick={handleSubmit}
           className="bg-[#84C7AE] hover:bg-[#6db49b] text-white px-6 py-2 rounded-xl text-sm"
         >
-          Speichern & Weiter
+          Speichern
         </button>
+        {message && <p className="mt-2 text-sm">{message}</p>}
       </div>
     </div>
   );
