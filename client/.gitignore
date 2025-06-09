@@ -1,0 +1,11 @@
+# Globale .env-Dateien ignorieren
+.env
+
+# Frontend und Backend .env-Dateien ignorieren
+/frontend/.env
+/server/.env
+
+# Abhängigkeiten ignorieren
+node_modules
+
+**/.env
