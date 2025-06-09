@@ -1,5 +1,6 @@
-import { Link, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { CheckCircle } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 
 const kapitel = [
@@ -59,10 +60,6 @@ const kapitel = [
 
 export default function Sidebar() {
   const location = useLocation();
-  const [open, setOpen] = useState(() => {
-    const path = location.pathname.split("/").pop();
-    return path;
-  });
   const [status, setStatus] = useState({});
 
   useEffect(() => {
@@ -83,35 +80,37 @@ export default function Sidebar() {
   }, []);
 
   return (
-    <aside className="w-64 bg-white shadow-lg p-4 overflow-y-auto max-h-[calc(100vh-2rem)] rounded-xl">
-      <h2 className="text-xl font-bold mb-4">Kapitel</h2>
-      <ul className="space-y-3">
+    <aside className="w-64 bg-white shadow-lg p-4 overflow-y-auto max-h-[calc(100vh-2rem)] rounded-xl border border-gray-100">
+      <h2 className="text-xl font-bold mb-4 text-gray-800">Businessplan</h2>
+      <ul className="space-y-1">
         {kapitel.map((k) => {
           const isActive = location.pathname.includes(k.key);
           const isDone = status[k.key] === "done";
-
-          const buttonClass = isActive
-            ? "bg-[#84C7AE]/10 text-[#84C7AE]"
-            : isDone
-            ? "bg-gray-100 text-gray-400"
-            : "text-gray-800 hover:bg-gray-100";
 
           return (
             <li key={k.key}>
               <Link
                 to={`/businessplan/start/${k.key}`}
-                className={`block w-full text-left px-3 py-2 rounded-xl font-semibold transition ${buttonClass}`}
+                className={`flex items-center justify-between w-full px-3 py-2 rounded-lg font-semibold transition ${
+                  isActive
+                    ? "bg-[#84C7AE]/10 text-[#84C7AE]"
+                    : "text-gray-800 hover:bg-gray-100"
+                }`}
               >
-                {k.title}
+                <span className="flex items-center gap-2">
+                  {isDone && (
+                    <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                  )}
+                  {k.title}
+                </span>
               </Link>
 
-              {open === k.key && k.unterpunkte.length > 0 && (
-                <ul className="ml-3 mt-2 space-y-1 text-sm text-gray-500">
-                  {k.unterpunkte.map((u, j) => (
-                    <li key={j}>• {u}</li>
-                  ))}
-                </ul>
-              )}
+              {/* Immer sichtbare Unterpunkte (nicht klickbar) */}
+              <ul className="ml-6 mt-1 space-y-1 text-sm text-gray-500">
+                {k.unterpunkte.map((u, j) => (
+                  <li key={j} className="pl-2">• {u}</li>
+                ))}
+              </ul>
             </li>
           );
         })}
