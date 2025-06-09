@@ -15,6 +15,7 @@ import BusinessplanIntro from "./generator/BusinessplanIntro";
 import GeneratorLayout from "./generator/GeneratorLayout";
 import Deckblatt from "./generator/Deckblatt";
 import Zusammenfassung from "./generator/zusammenfassung";
+import Geschaeftsidee from "./generator/Geschaeftsidee";
 import Navbar from "./components/Navbar";
 import PrivateRoute from "./components/PrivateRoute";
 import PublicOnlyRoute from "./components/PublicOnlyRoute";
@@ -126,6 +127,8 @@ export default function App() {
         >
           <Route path="deckblatt" element={<Deckblatt />} />
           <Route path="zusammenfassung" element={<Zusammenfassung />} />
+          <Route path="/businessplan/start/geschaeftsidee" element={<Geschaeftsidee />} />
+
           {/* Weitere Kapitel */}
         </Route>
       </Routes>
