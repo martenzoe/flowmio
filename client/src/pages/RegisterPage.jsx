@@ -16,12 +16,18 @@ export default function RegisterPage() {
       return;
     }
 
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/profile-setup`,
+      },
+    });
 
     if (error) {
       setMessage("Fehler: " + error.message);
     } else {
-      setMessage("Bitte prüfe dein Postfach zur Bestätigung.");
+      setMessage("Bitte bestätige deine E-Mail-Adresse. Schau in dein Postfach.");
     }
   };
 
@@ -30,7 +36,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 space-y-6">
         <div className="text-center">
           <h2 className="text-3xl font-extrabold text-gray-800">Konto erstellen</h2>
-          <p className="text-sm text-gray-500 mt-1">Starte jetzt mit deinem Flowmio Zugang</p>
+          <p className="text-sm text-gray-500 mt-1">Starte jetzt mit deinem Flowmio-Zugang</p>
         </div>
 
         <form onSubmit={handleRegister} className="space-y-4">

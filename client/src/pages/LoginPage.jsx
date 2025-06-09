@@ -10,26 +10,12 @@ export default function LoginPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      setMessage("Fehler: " + error.message);
+      setMessage("❌ Fehler: " + error.message);
     } else {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (user) {
-        const res = await fetch("http://localhost:4000/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        });
-
-        const data = await res.json();
-        if (data.token) {
-          localStorage.setItem("token", data.token);
-        }
-      }
-
       navigate("/dashboard");
     }
   };

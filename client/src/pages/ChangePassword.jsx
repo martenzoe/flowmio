@@ -1,10 +1,11 @@
 // src/pages/ChangePassword.jsx
 import { useState } from "react";
-import { changePassword } from "../api/changePassword";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabaseClient";
 
 export default function ChangePassword() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
-    currentPassword: "",
     newPassword: "",
     confirmNewPassword: "",
   });
@@ -15,7 +16,7 @@ export default function ChangePassword() {
   };
 
   const handleSubmit = async () => {
-    if (!form.currentPassword || !form.newPassword || !form.confirmNewPassword) {
+    if (!form.newPassword || !form.confirmNewPassword) {
       return setMessage("❌ Bitte alle Felder ausfüllen.");
     }
 
@@ -23,13 +24,15 @@ export default function ChangePassword() {
       return setMessage("❌ Neue Passwörter stimmen nicht überein.");
     }
 
-    const res = await changePassword(form.currentPassword, form.newPassword);
+    const { error } = await supabase.auth.updateUser({
+      password: form.newPassword,
+    });
 
-    if (res.success) {
-      setMessage("✅ Passwort erfolgreich geändert.");
-      setForm({ currentPassword: "", newPassword: "", confirmNewPassword: "" });
+    if (error) {
+      setMessage("❌ " + error.message);
     } else {
-      setMessage(`❌ ${res.error || "Fehler bei der Änderung."}`);
+      setMessage("✅ Passwort erfolgreich geändert.");
+      setTimeout(() => navigate("/dashboard"), 1500); // kurze Bestätigung, dann weiter
     }
   };
 
@@ -37,15 +40,9 @@ export default function ChangePassword() {
     <div className="max-w-md mx-auto mt-12 bg-white p-6 rounded-xl shadow">
       <h1 className="text-xl font-bold mb-4">Passwort ändern</h1>
 
-      <label className="block text-sm font-medium text-gray-700 mb-1">Aktuelles Passwort</label>
-      <input
-        type="password"
-        className="w-full mb-4 p-2 border rounded"
-        value={form.currentPassword}
-        onChange={(e) => handleChange("currentPassword", e.target.value)}
-      />
-
-      <label className="block text-sm font-medium text-gray-700 mb-1">Neues Passwort</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        Neues Passwort
+      </label>
       <input
         type="password"
         className="w-full mb-4 p-2 border rounded"
@@ -53,7 +50,9 @@ export default function ChangePassword() {
         onChange={(e) => handleChange("newPassword", e.target.value)}
       />
 
-      <label className="block text-sm font-medium text-gray-700 mb-1">Neues Passwort bestätigen</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        Neues Passwort bestätigen
+      </label>
       <input
         type="password"
         className="w-full mb-6 p-2 border rounded"
@@ -68,7 +67,7 @@ export default function ChangePassword() {
         Speichern
       </button>
 
-      {message && <p className="mt-4 text-sm">{message}</p>}
+      {message && <p className="mt-4 text-sm text-center">{message}</p>}
     </div>
   );
 }

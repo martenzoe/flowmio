@@ -1,3 +1,4 @@
+// src/hooks/useCurrentUser.js
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -7,6 +8,8 @@ export function useCurrentUser() {
   const [loading, setLoading] = useState(true);
 
   const fetchUser = useCallback(async () => {
+    setLoading(true);
+
     const {
       data: { user },
       error,
@@ -15,27 +18,35 @@ export function useCurrentUser() {
     setUser(user);
 
     if (user) {
-      const { data: profileData } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .single();
-      setProfile(profileData);
+
+      if (!profileError) {
+        setProfile(profileData);
+      } else {
+        setProfile(null);
+      }
     } else {
       setProfile(null);
     }
+
     setLoading(false);
   }, []);
 
   useEffect(() => {
     fetchUser();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
       fetchUser();
     });
 
     return () => {
-      authListener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, [fetchUser]);
 
