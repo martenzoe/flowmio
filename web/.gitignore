@@ -1,27 +1,13 @@
-# Node modules
-node_modules/
-
-# Build output
-dist/
-build/
-
-# Env files (keine Secrets ins Repo)
+# env
 .env
-.env.*     # auch .env.local, .env.production usw.
+.env.local
+.env.*.local
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# node / build
+node_modules
+dist
+.vite
+.vercel
 
-# Editor/OS
+# misc
 .DS_Store
-.idea/
-.vscode/
-
-# Supabase local state
-.supabase/
-
-# Mac Trash
-.Trash/
