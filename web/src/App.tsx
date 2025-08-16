@@ -1,38 +1,24 @@
-// src/App.tsx
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, Outlet } from 'react-router-dom';
-import { supabase } from './lib/supabase';
-import Auth from './routes/Auth';
-import AuthCallback from './routes/AuthCallback';
-import ResetPasswordPage from './routes/ResetPasswordPage';
-import RequireAuth from './components/RequireAuth';
-import Logout from './routes/Logout';
-import AppShell from './app/AppShell';
-import ModulesIndex from './routes/ModulesIndex';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { supabase } from "./lib/supabase";
 
-function AppHome() {
-  const navigate = useNavigate();
-  async function logout() {
-    await supabase.auth.signOut();
-    navigate('/auth', { replace: true });
-  }
-  return (
-    <div className="mx-auto max-w-5xl p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">👋 Willkommen in der App</h1>
-        <button
-          onClick={logout}
-          className="rounded-xl border px-3 py-1 hover:bg-slate-50 text-sm"
-        >
-          Logout
-        </button>
-      </div>
-      <p className="text-slate-600">Hier kommt gleich das Academy-Layout hin.</p>
-    </div>
-  );
-}
+// Auth & Shell
+import Auth from "./routes/Auth";
+import AuthCallback from "./routes/AuthCallback";
+import ResetPasswordPage from "./routes/ResetPasswordPage";
+import RequireAuth from "./components/RequireAuth";
+import Logout from "./routes/Logout";
+import AppShell from "./app/AppShell";
+
+// App-Seiten
+import Dashboard from "./routes/Dashboard";
+import AcademyIndex from "./routes/AcademyIndex";
+import PhaseDetail from "./routes/PhaseDetail";
+
+// Module
+import ModuleLayout from "./routes/module/ModuleLayout";
+import LessonPage from "./routes/module/LessonPage";
 
 function AppLayout() {
-  // Geschütztes Layout für alle /app/* Routen
   return (
     <RequireAuth>
       <AppShell>
@@ -47,7 +33,9 @@ function NotFound() {
     <div className="min-h-screen grid place-items-center p-6">
       <div className="text-center">
         <h1 className="text-2xl font-semibold mb-2">404 – Seite nicht gefunden</h1>
-        <a href="/auth" className="underline">Zur Anmeldung</a>
+        <a href="/auth" className="underline">
+          Zur Anmeldung
+        </a>
       </div>
     </div>
   );
@@ -63,12 +51,22 @@ export default function App() {
         <Route path="/auth/reset" element={<ResetPasswordPage />} />
         <Route path="/logout" element={<Logout />} />
 
-        {/* Geschützter Bereich: /app/* */}
+        {/* Geschützter Bereich */}
         <Route path="/app" element={<AppLayout />}>
-          <Route index element={<AppHome />} />
-          <Route path="modules" element={<ModulesIndex />} />
-          {/* hier kommen später weitere App-Routen rein, z.B.: */}
-          {/* <Route path="modules/:slug" element={<ModuleLayout />} /> */}
+          {/* Dashboard */}
+          <Route index element={<Dashboard />} />
+
+          {/* Gründer-Akademie */}
+          <Route path="academy" element={<AcademyIndex />} />
+          <Route path="academy/:phaseSlug" element={<PhaseDetail />} />
+
+          {/* === OFFIZIELLE Modul-Routen (konsistent mit deinen Links) === */}
+          <Route path="modules/:slug" element={<ModuleLayout />} />
+          <Route path="modules/:slug/lesson/:lessonSlug" element={<LessonPage />} />
+
+          {/* === BACKWARD-COMPAT: falls von PhaseDetail nach /academy/:phaseSlug/:slug verlinkt wird === */}
+          <Route path="academy/:phaseSlug/:slug" element={<ModuleLayout />} />
+          <Route path="academy/:phaseSlug/:slug/lesson/:lessonSlug" element={<LessonPage />} />
         </Route>
 
         {/* Defaults */}

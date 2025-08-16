@@ -1,5 +1,95 @@
 @import "tailwindcss";
 
-:root { color-scheme: light dark; } /* optional */
+/* ---------- Base ---------- */
+:root { color-scheme: light; }
 html, body, #root { height: 100%; }
 body { margin: 0; }
+
+@layer base {
+  body { @apply bg-[#F5F7FB] text-slate-900 antialiased; }
+}
+
+/* ---------- Borderloses Design + kompakter ---------- */
+@layer components {
+  /* große Bereiche */
+  .panel {
+    background:#fff;
+    border-radius:18px;
+    box-shadow:0 6px 18px rgba(15,23,42,.05);   /* etwas weniger Shadow */
+    padding:1.25rem;                            /* p-5 statt p-6 */
+  }
+
+  /* Karten / kleine Blöcke */
+  .card {
+    background:#fff;
+    border-radius:14px;
+    box-shadow:0 3px 12px rgba(15,23,42,.05);
+    padding:.875rem;                            /* p-3.5 */
+  }
+
+  /* Intro-/Info-Blase */
+  .muted {
+    border-radius:14px;
+    background:rgba(59,130,246,.08);
+    padding:.875rem;
+  }
+
+  /* linke Mini-Sidebar-Box */
+  .sidebar-box {
+    background:#fff;
+    border-radius:18px;
+    box-shadow:0 3px 12px rgba(15,23,42,.05);
+    padding:.75rem;
+  }
+
+  /* kompakte 3-Spalten-Layout-Hilfe */
+  .layout-3col { @apply grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_320px]; }
+
+  /* Nav-Items (links) */
+  .nav-item { @apply block rounded-xl px-3 py-2 text-sm hover:bg-slate-50 transition; }
+  .nav-item-active { @apply bg-blue-50; }
+
+  /* Progress */
+  .progress-bar { @apply h-1.5 w-full rounded-full bg-slate-200 overflow-hidden; }
+  .progress-val { @apply h-full bg-blue-600; }
+  .tip { border-radius:14px; background:rgba(59,130,246,.08); padding:.75rem; font-size:.875rem; }
+}
+/* ---------- Brand Palette (Flowmioo Blue) ---------- */
+:root{
+  /* Tailwind Blue Scale */
+  --brand-800:#1E40AF;  /* blue-800 */
+  --brand-700:#1D4ED8;  /* blue-700 */
+  --brand-600:#2563EB;  /* blue-600  ← dein Wunschton */
+  --brand-500:#3B82F6;  /* blue-500 */
+  --brand-400:#60A5FA;  /* blue-400 */
+  --brand-100:#DBEAFE;  /* blue-100 */
+  --brand-50:#EFF6FF;   /* blue-50  */
+}
+
+/* ---------- Reusable UI ---------- */
+@layer components{
+  /* Buttons */
+  .btn{ @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition; }
+  .btn-primary{
+    background:var(--brand-600); color:#fff;
+    box-shadow:0 6px 18px rgba(37,99,235,.22);
+  }
+  .btn-primary:hover{ filter:brightness(1.05); }
+  .btn-ghost{
+    @apply rounded-xl bg-white shadow px-4 py-2 text-sm hover:brightness-105;
+    color:var(--brand-700);
+  }
+
+  /* Zahl-Badge + Unterstrich (für 1/2/3 Kacheln) */
+  .num-badge{
+    @apply h-8 w-8 grid place-items-center rounded-full text-sm font-semibold;
+    border:2px solid var(--brand-600); color:var(--brand-700); background:#fff;
+  }
+  .num-underline{ height:4px; width:22px; background:var(--brand-600); border-radius:9999px; }
+
+  /* Tipps / Info-Bubbles */
+  .tip{ border-radius:14px; background:rgba(37,99,235,.08); padding:.75rem; font-size:.875rem; }
+
+    /* Progress-Füllung in Brand */
+    .progress-val{ background:var(--brand-600); }
+  }
