@@ -1,10 +1,18 @@
+import { Outlet, Link } from 'react-router-dom'
 export default function App() {
   return (
-    <div className="min-h-screen grid place-items-center bg-gray-50">
-      <div className="p-8 rounded-2xl bg-white shadow">
-        <h1 className="text-4xl font-bold text-blue-600">Hello Tailwind v4 🚀</h1>
-        <p className="mt-2 text-gray-600">Wenn das blau & grau ist → v4 läuft.</p>
-      </div>
+    <div className="min-h-screen">
+      <header className="border-b">
+        <nav className="mx-auto max-w-6xl flex items-center justify-between p-4">
+          <Link to="/app" className="font-semibold">Flowmio</Link>
+          <div className="space-x-3">
+            <Link to="/" className="text-sm text-gray-500">Landing</Link>
+          </div>
+        </nav>
+      </header>
+      <main className="mx-auto max-w-6xl p-6">
+        <Outlet />
+      </main>
     </div>
   )
 }
