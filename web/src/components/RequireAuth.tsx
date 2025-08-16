@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Navigate } from 'react-router-dom'
 
-export default function RequireAuth({ children }: { children: React.ReactNode }) {
+export default function RequireAuth({ children }: { children: React.ReactElement }) {
   const [ready, setReady] = useState(false)
   const [authed, setAuthed] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setAuthed(!!data.session); setReady(true)
+      setAuthed(!!data.session)
+      setReady(true)
     })
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setAuthed(!!session)
@@ -17,5 +17,6 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   }, [])
 
   if (!ready) return <div className="p-6">Loading…</div>
-  return authed ? <>{children}</> : <Navigate to="/auth" replace />
+  if (!authed) return <div className="p-6">Bitte <a className="text-blue-600" href="/auth">einloggen</a>.</div>
+  return children
 }
