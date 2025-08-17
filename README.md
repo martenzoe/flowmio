@@ -71,7 +71,7 @@ Flowmioo — Founder Academy (WIP)
 
 ### Routing (React Router)
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   /auth, /auth/callback, /auth/reset, /logout  /app (RequireAuth + AppShell)  /app/academy  /app/academy/:phaseSlug  /app/modules/:slug  /app/modules/:slug/lesson/:lessonSlug   `
+`/auth, /auth/callback, /auth/reset, /logout  /app (RequireAuth + AppShell)  /app/academy  /app/academy/:phaseSlug  /app/modules/:slug  /app/modules/:slug/lesson/:lessonSlug   `
 
 ▶️ Local Development
 --------------------
@@ -89,11 +89,11 @@ Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQL
 
 ### Install & run
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   # install deps  pnpm install  # or: npm install  # start dev  pnpm dev  # or: npm run dev   `
+`# install deps  pnpm install  # or: npm install  # start dev  pnpm dev  # or: npm run dev   `
 
 Vite + Tailwind are wired through the Vite plugin:
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   // vite.config.ts  import { defineConfig } from 'vite'  import react from '@vitejs/plugin-react'  import tailwind from '@tailwindcss/vite'  export default defineConfig({    plugins: [react(), tailwind()],  })   `
+`// vite.config.ts  import { defineConfig } from 'vite'  import react from '@vitejs/plugin-react'  import tailwind from '@tailwindcss/vite'  export default defineConfig({    plugins: [react(), tailwind()],  })   `
 
 🔐 Configuration
 ----------------
@@ -102,7 +102,7 @@ Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQL
 
 Create .env (or .env.local) at the project root:
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co  VITE_SUPABASE_ANON_KEY=eyJhbGciOi...   `
+`VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co  VITE_SUPABASE_ANON_KEY=eyJhbGciOi...   `
 
 > Do **not** put your OpenAI key in the frontend. AI requests run on the server-side **Edge Function**.
 
@@ -126,15 +126,15 @@ Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQL
 
 ### 2) Function files (repo layout)
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   supabase/functions/ai-generate/    deno.json    index.ts   `
+`supabase/functions/ai-generate/    deno.json    index.ts   `
 
 **deno.json**
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   {    "compilerOptions": {      "lib": ["deno.ns", "dom"]    }  }   `
+`{    "compilerOptions": {      "lib": ["deno.ns", "dom"]    }  }   `
 
 **Deploy**
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   # requires Supabase CLI installed (npm i -g supabase)  supabase functions deploy ai-generate   `
+`# requires Supabase CLI installed (npm i -g supabase)  supabase functions deploy ai-generate   `
 
 > Your editor may show TypeScript “Deno” typing warnings locally — that’s fine.The function runs in Deno on Supabase and will work after deploy.
 
@@ -142,7 +142,6 @@ Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQL
 
 src/lib/ai.ts — fetch the Edge Function **as the signed-in user**:
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML``   import { supabase } from './supabase';  export async function callAi(payload: {    promptType: string;    inputs?: Record;    moduleId?: string | null;    temperature?: number;  }) {    const { data: sess } = await supabase.auth.getSession();    const res = await fetch(      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-generate`,      {        method: 'POST',        headers: {          'Content-Type': 'application/json',          'Authorization': `Bearer ${sess?.session?.access_token ?? ''}`,          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,        },        body: JSON.stringify(payload),      }    );    if (!res.ok) {      const text = await res.text().catch(() => '');      throw new Error(text || 'AI function failed');    }    return res.json() as Promise<{ ok: boolean; text: string; usage?: any }>;  }   ``
 
 📝 Content authoring (Intro & Chapters)
 ---------------------------------------
@@ -176,12 +175,8 @@ Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQL
 📁 Project structure (excerpt)
 ------------------------------
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   src/    app/      AppShell.tsx    lib/      supabase.ts      ai.ts    routes/      AcademyIndex.tsx      PhaseDetail.tsx      module/        ModuleLayout.tsx        ModuleOverview.tsx        LessonPage.tsx  index.css  vite.config.ts   `
+`src/    app/      AppShell.tsx    lib/      supabase.ts      ai.ts    routes/      AcademyIndex.tsx      PhaseDetail.tsx      module/        ModuleLayout.tsx        ModuleOverview.tsx        LessonPage.tsx  index.css  vite.config.ts   `
 
-🧪 Seed example (Phase 1 / Module 1 / Chapters 1–2)
----------------------------------------------------
-
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   -- Phase  insert into public.phases (title, slug, order_index, description)  values ('Phase 1: Mindset & Motivation', 'phase-1', 1, 'Build your Why and a strong founder mindset.')  on conflict (slug) do nothing;  -- Module  insert into public.modules (title, slug, description, phase_id, order_index)  select 'Find your Why', 'finde-dein-warum', 'Clarity on your inner drive.', p.id, 1  from public.phases p where p.slug='phase-1'  on conflict (slug) do nothing;  -- Intro  insert into public.module_lessons (module_id, slug, title, order_index, kind, body_md)  select m.id, 'intro', 'Introduction', 1, 'intro',  'Meow! I\'m Flowmioo – your fluffy escape guide from the hamster wheel. Want out of 9-to-5? Ready to build your own thing but everything still feels blurry? Then it’s time to find your WHY. Without it… you’re a ship without a compass.  You’ll uncover your true Why – clear, personal, motivating. No fluff. What gets you up in the morning? Why do you want to found? What’s worth the grind?'  from public.modules m where m.slug='finde-dein-warum'  on conflict (slug) do nothing;  -- Chapter 1  insert into public.module_lessons (module_id, slug, title, order_index, kind, body_md)  select m.id, 'kapitel-1', 'What drives you?', 2, 'chapter', null  from public.modules m where m.slug='finde-dein-warum'  on conflict (slug) do nothing;  -- Chapter 2  insert into public.module_lessons (module_id, slug, title, order_index, kind, body_md)  select m.id, 'kapitel-2', 'Exercise – Your personal Why', 3, 'chapter', null  from public.modules m where m.slug='finde-dein-warum'  on conflict (slug) do nothing;   `
 
 🗺️ Roadmap
 -----------
