@@ -1,3 +1,4 @@
+// src/routes/module/LessonPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
@@ -23,6 +24,15 @@ type ModuleRow = {
 
 type Phase = { id: string; title: string; slug: string };
 
+function Spinner({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+    </svg>
+  );
+}
+
 export default function LessonPage() {
   const { slug, lessonSlug } = useParams();
   const navigate = useNavigate();
@@ -33,24 +43,24 @@ export default function LessonPage() {
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Formular-State (Kapitel 1)
+  // Formular-State
   const [selections, setSelections] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [err, setErr] = useState<string>("");
 
+  // ----- Laden: Modul / Phase / Lessons / aktuelle Lesson -----
   useEffect(() => {
     let alive = true;
     (async () => {
       setLoading(true);
 
-      // Modul + Phase laden
       const { data: mod } = await supabase
         .from("modules")
         .select("id,slug,title,description,phase_id")
         .eq("slug", slug)
         .single();
-
       if (!alive || !mod) return;
       setModuleRow(mod as ModuleRow);
 
@@ -61,7 +71,6 @@ export default function LessonPage() {
         .maybeSingle();
       if (alive) setPhase((ph ?? null) as Phase | null);
 
-      // Lessons des Moduls
       const { data: ls } = await supabase
         .from("module_lessons")
         .select("*")
@@ -75,21 +84,12 @@ export default function LessonPage() {
 
       setLoading(false);
     })();
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [slug, lessonSlug]);
 
-  // Intro/Chapters für Navi und Next
-  const intro = useMemo(
-    () => allLessons.find((l) => l.kind === "intro") ?? null,
-    [allLessons]
-  );
-  const chapters = useMemo(
-    () => allLessons.filter((l) => l.kind === "chapter"),
-    [allLessons]
-  );
+  // Intro/Chapters + Position
+  const intro = useMemo(() => allLessons.find((l) => l.kind === "intro") ?? null, [allLessons]);
+  const chapters = useMemo(() => allLessons.filter((l) => l.kind === "chapter"), [allLessons]);
 
   const currentIdx = useMemo(() => {
     if (!lesson) return -1;
@@ -99,20 +99,68 @@ export default function LessonPage() {
   const nextChapter = useMemo(() => {
     if (currentIdx < 0 || currentIdx + 1 >= chapters.length) return null;
     return chapters[currentIdx + 1];
-    // Falls es kein weiteres Kapitel gibt, navigieren wir später zum Modul-Intro.
   }, [chapters, currentIdx]);
 
   function toggleChoice(opt: string) {
-    setSelections((prev) =>
-      prev.includes(opt) ? prev.filter((o) => o !== opt) : [...prev, opt]
-    );
+    setSelections((prev) => (prev.includes(opt) ? prev.filter((o) => o !== opt) : [...prev, opt]));
   }
 
-  // Fortschritt rudimentär tracken (optional)
-  async function markLessonCompleted() {
+  // ----- Vorhandene Antworten laden -----
+  useEffect(() => {
+    (async () => {
+      if (!lesson?.id) return;
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return;
+
+      const { data, error } = await supabase
+        .from("user_lesson_responses")
+        .select("data_json")
+        .eq("user_id", u.user.id)
+        .eq("lesson_id", lesson.id)
+        .maybeSingle();
+
+      if (!error && data?.data_json) {
+        const dj = data.data_json as any;
+        setSelections(Array.isArray(dj.selections) ? dj.selections : []);
+        setNotes(typeof dj.notes === "string" ? dj.notes : "");
+      }
+    })();
+  }, [lesson?.id]);
+
+  // ----- Speichern (nimmt optional direkte Werte entgegen!) -----
+  async function saveResponse(nextNotes?: string, nextSelections?: string[]) {
+    if (!lesson?.id) return;
+    setSaving(true);
     try {
       const { data: u } = await supabase.auth.getUser();
-      if (!u.user || !lesson) return;
+      if (!u.user) return;
+
+      const notesToSave = typeof nextNotes === "string" ? nextNotes : notes;
+      const selectionsToSave = Array.isArray(nextSelections) ? nextSelections : selections;
+
+      await supabase
+        .from("user_lesson_responses")
+        .upsert(
+          {
+            user_id: u.user.id,
+            lesson_id: lesson.id,
+            data_json: { selections: selectionsToSave, notes: notesToSave },
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,lesson_id" }
+        );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ----- Fortschritt markieren -----
+  async function markLessonCompleted() {
+    if (!lesson?.id) return;
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return;
+
       await supabase
         .from("user_lesson_progress")
         .upsert(
@@ -122,27 +170,31 @@ export default function LessonPage() {
             completed: true,
             completed_at: new Date().toISOString(),
           },
-          { onConflict: "user_id,lesson_id" as any }
+          { onConflict: "user_id,lesson_id" }
         );
-    } catch {
-      /* still ok for now */
-    }
+    } catch { /* ok */ }
   }
 
+  // ----- Weiter-Button -----
   async function goNext() {
+    await saveResponse(); // speichert letzten Stand
     await markLessonCompleted();
     if (!moduleRow) return;
-    if (nextChapter) {
-      navigate(`/app/modules/${moduleRow.slug}/lesson/${nextChapter.slug}`);
-    } else {
-      navigate(`/app/modules/${moduleRow.slug}`);
-    }
+    if (nextChapter) navigate(`/app/modules/${moduleRow.slug}/lesson/${nextChapter.slug}`);
+    else navigate(`/app/modules/${moduleRow.slug}`);
   }
 
+  // ----- KI-Optimierung (speichert den neuen Text SOFORT) -----
   async function handleAiOptimize() {
-    if (!moduleRow || !lesson) return;
-    setAiLoading(true);
     setErr("");
+    if (!moduleRow || !lesson) return;
+
+    if (!notes.trim() && selections.length === 0) {
+      setErr("Bitte mindestens Stichpunkte eintragen.");
+      return;
+    }
+
+    setAiLoading(true);
     try {
       const res = await callAi({
         promptType: "motivation",
@@ -156,7 +208,12 @@ export default function LessonPage() {
         moduleId: moduleRow.id,
         temperature: 0.4,
       });
-      if (res?.text) setNotes(res.text.trim());
+
+      const newText = (res?.text ?? "").trim();
+      if (newText) {
+        setNotes(newText);
+        await saveResponse(newText, selections); // <<— wichtig: neuen Text direkt speichern
+      }
     } catch (e: any) {
       setErr(e?.message ?? "Unbekannter Fehler beim Optimieren.");
     } finally {
@@ -165,17 +222,12 @@ export default function LessonPage() {
   }
 
   if (loading) return <div className="p-6">Lade Kapitel…</div>;
-  if (!moduleRow || !lesson)
-    return <div className="p-6 text-red-600">Kapitel nicht gefunden.</div>;
+  if (!moduleRow || !lesson) return <div className="p-6 text-red-600">Kapitel nicht gefunden.</div>;
   if (lesson.kind !== "chapter") {
     return (
       <div className="p-6">
-        <p className="text-sm text-gray-600 mb-2">
-          Diese Seite ist die Einführungsseite. Bitte ein Kapitel aus der Liste öffnen.
-        </p>
-        <Link className="text-blue-600 underline" to={`/app/modules/${moduleRow.slug}`}>
-          Zur Einführungsseite
-        </Link>
+        <p className="text-sm text-gray-600 mb-2">Diese Seite ist die Einführungsseite. Bitte ein Kapitel aus der Liste öffnen.</p>
+        <Link className="text-blue-600 underline" to={`/app/modules/${moduleRow.slug}`}>Zur Einführungsseite</Link>
       </div>
     );
   }
@@ -199,22 +251,15 @@ export default function LessonPage() {
       {/* LINKS – Modul-Navi */}
       <aside className="hidden lg:block sticky top-16 self-start">
         <div className="sidebar-box">
-          <Link
-            to={phase ? `/app/academy/${phase.slug}` : "/app/academy"}
-            className="text-sm text-gray-500 hover:underline"
-          >
+          <Link to={phase ? `/app/academy/${phase.slug}` : "/app/academy"} className="text-sm text-gray-500 hover:underline">
             ← Zurück zur Phase
           </Link>
-          <h2 className="text-[17px] font-semibold mt-2 leading-tight">
-            {moduleRow.title}
-          </h2>
+          <h2 className="text-[17px] font-semibold mt-2 leading-tight">{moduleRow.title}</h2>
 
           <nav className="mt-3 space-y-2">
             <Link to={`/app/modules/${moduleRow.slug}`} className="nav-item">
               <div className="font-medium">Einführungsseite & Lernziele</div>
-              {intro?.title && (
-                <div className="text-xs text-gray-500 mt-0.5">{intro.title}</div>
-              )}
+              {intro?.title && <div className="text-xs text-gray-500 mt-0.5">{intro.title}</div>}
             </Link>
             {chapters.map((c, idx) => {
               const active = c.slug === lesson.slug;
@@ -238,15 +283,10 @@ export default function LessonPage() {
         <div className="panel">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
-              <Link
-                to={`/app/modules/${moduleRow.slug}`}
-                className="text-sm text-gray-500 hover:underline"
-              >
+              <Link to={`/app/modules/${moduleRow.slug}`} className="text-sm text-gray-500 hover:underline">
                 ← Zur Einführungsseite
               </Link>
-              <h1 className="text-[22px] font-semibold leading-tight">
-                {lesson.title}
-              </h1>
+              <h1 className="text-[22px] font-semibold leading-tight">{lesson.title}</h1>
             </div>
           </div>
 
@@ -259,7 +299,7 @@ export default function LessonPage() {
               return (
                 <label
                   key={opt}
-                  className={`flex items-center gap-3 rounded-xl border p-3 cursor-pointer ${
+                  className={`flex items-center gap-3 rounded-xl border border-slate-200/60 shadow-sm p-3 cursor-pointer ${
                     checked ? "bg-blue-50 border-blue-200" : "hover:bg-slate-50"
                   }`}
                 >
@@ -277,48 +317,64 @@ export default function LessonPage() {
 
           {/* Textfeld + KI-Button */}
           <div className="mt-6">
-            <div className="font-medium mb-2">
-              Schreibe hier deine persönliche Motivation auf:
-            </div>
+            <div className="font-medium mb-2">Schreibe hier deine persönliche Motivation auf:</div>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
+              onBlur={() => saveResponse()}  // speichert beim Verlassen des Feldes
               rows={6}
-              className="w-full rounded-xl border p-3 text-sm"
+              className="w-full rounded-xl border border-slate-200/60 shadow-sm p-3 text-sm"
               placeholder="Mit der Unternehmensgründung möchte ich…"
             />
             <div className="flex items-center justify-end mt-2">
               <button
                 onClick={handleAiOptimize}
-                disabled={aiLoading || (!notes && selections.length === 0)}
-                className="btn"
+                disabled={aiLoading || (!notes.trim() && selections.length === 0)}
+                className={`btn btn-ghost ${aiLoading || (!notes.trim() && selections.length === 0) ? "opacity-60 cursor-not-allowed" : ""}`}
                 title={
-                  notes || selections.length
+                  notes.trim() || selections.length
                     ? "Formulierung mit KI verbessern"
                     : "Bitte zuerst Auswahl treffen oder Text eingeben"
                 }
+                aria-busy={aiLoading}
               >
-                {aiLoading ? "Optimieren…" : "Mit KI optimieren"}
+                {aiLoading ? (
+                  <>
+                    <Spinner />
+                    <span>Optimieren…</span>
+                  </>
+                ) : (
+                  <>
+                    <span>✨</span>
+                    <span>Mit KI optimieren</span>
+                  </>
+                )}
               </button>
             </div>
             {err && <div className="mt-2 text-sm text-red-600">{err}</div>}
           </div>
 
-          {/* Tipp-Kästchen */}
-          <div className="mt-6 rounded-xl bg-slate-50 border p-3 text-sm">
+          {/* Tipp */}
+          <div className="mt-6 rounded-xl bg-slate-50 border border-slate-200/60 shadow-sm p-3 text-sm">
             <div className="flex items-start gap-2">
               <div className="text-blue-600 text-lg leading-none">💡</div>
               <div>
-                „Wenn’s mal schwer wird (und das wird es), liest du genau hier nach – und
-                erinnerst dich: Darum hast du angefangen.“
+                „Wenn’s mal schwer wird (und das wird es), liest du genau hier nach –
+                und erinnerst dich: Darum hast du angefangen.“
               </div>
             </div>
           </div>
 
           {/* Weiter */}
-          <div className="mt-6 flex justify-end">
-            <button onClick={goNext} className="btn btn-primary">
-              Weiter
+          <div className="mt-6 flex items-center justify-end gap-3">
+            {saving && <span className="text-xs opacity-60">Speichere…</span>}
+            <button
+              onClick={goNext}
+              className="btn btn-primary"
+              aria-label={nextChapter ? "Weiter zum nächsten Kapitel" : "Zur Modul-Übersicht"}
+            >
+              <span>Weiter</span>
+              <span>→</span>
             </button>
           </div>
         </div>

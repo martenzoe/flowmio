@@ -1,22 +1,25 @@
+/// <reference lib="deno.ns" />
+/// <reference lib="deno.unstable" />
 // deno-lint-ignore-file no-explicit-any
+
 // Supabase Edge Function: ai-generate
-// Läuft auf Deno (Supabase). Loggt Usage, zieht Tokens ab und liefert KI-Text zurück.
+// - Liest den eingeloggten User (via JWT vom Client)
+// - Ruft OpenAI auf
+// - Loggt Tokenverbrauch (ai_usage_log) und erhöht tokens_used
 
 import OpenAI from "npm:openai@4";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// --- ENV ---
-// Setze diese drei Secrets im Supabase Dashboard (Project Settings > Config > Secrets):
-// OPENAI_API_KEY
-// SUPABASE_URL
-// SUPABASE_SERVICE_ROLE_KEY
+// ---- ENV (Namen = Secrets in "Edge Functions → Secrets")
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SB_URL = Deno.env.get("SB_URL")!;
+const SB_SERVICE_ROLE_KEY = Deno.env.get("SB_SERVICE_ROLE_KEY")!;
+const SB_ANON_KEY = Deno.env.get("SB_ANON_KEY")!;
+
 const MODEL = "gpt-4o-mini";
 
-// ---- Helpers ----
-function cors(res: Response) {
+// ---- CORS Helper
+function withCORS(res: Response) {
   const h = new Headers(res.headers);
   h.set("Access-Control-Allow-Origin", "*");
   h.set("Access-Control-Allow-Headers", "authorization, x-client-info, apikey, content-type");
@@ -32,35 +35,43 @@ type AiPayload = {
 };
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return cors(new Response("ok", { status: 200 }));
-
+  if (req.method === "OPTIONS") return withCORS(new Response("ok", { status: 200 }));
   if (req.method !== "POST") {
-    return cors(new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 }));
+    return withCORS(new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405, headers: { "Content-Type": "application/json" },
+    }));
   }
 
   try {
-    const anonClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+    // 1) User anhand des JWT aus dem Authorization-Header ermitteln
+    const anon = createClient(SB_URL, SB_ANON_KEY, {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
     });
-    const { data: userRes } = await anonClient.auth.getUser();
-    if (!userRes?.user) {
-      return cors(new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }));
+    const { data: userRes } = await anon.auth.getUser();
+    const userId = userRes?.user?.id;
+    if (!userId) {
+      return withCORS(new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { "Content-Type": "application/json" },
+      }));
     }
-    const userId = userRes.user.id;
 
+    // 2) Body prüfen
     const body: AiPayload = await req.json();
-    const { promptType, inputs = {}, moduleId = null, temperature = 0.7 } = body ?? {};
+    const { promptType, inputs = {}, moduleId = null, temperature = 0.6 } = body || {};
     if (!promptType) {
-      return cors(new Response(JSON.stringify({ error: "Missing promptType" }), { status: 400 }));
+      return withCORS(new Response(JSON.stringify({ error: "Missing promptType" }), {
+        status: 400, headers: { "Content-Type": "application/json" },
+      }));
     }
 
+    // 3) OpenAI call
     const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-    // --- Prompt-Design (einfach, erweiterbar pro promptType) ---
     const system = [
       "Du bist Flowmioo, ein pragmatischer Startup-Coach.",
       "Sprich klar, knapp, deutsch.",
-      "Wenn der Nutzer Freitext mitliefert, fasse zuerst zusammen, dann gib 3–5 konkrete nächste Schritte."
+      "Wenn der Nutzer Stichpunkte liefert, forme einen motivierenden, kurzen Text",
+      "und gib 3–5 konkrete nächste Schritte."
     ].join(" ");
 
     const userMsg = `PromptType: ${promptType}
@@ -81,54 +92,41 @@ Ziel: Hilf dem Nutzer mit greifbaren, umsetzbaren Tipps.`;
       completion.choices?.[0]?.message?.content?.trim() ||
       "Leider kam keine sinnvolle Antwort zurück.";
 
-    const usage = completion.usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    // usage sicher zusammensetzen (ohne „nie nullish“-Warnungen)
+    const prompt_tokens = completion.usage?.prompt_tokens ?? 0;
+    const completion_tokens = completion.usage?.completion_tokens ?? 0;
+    const total_tokens = completion.usage?.total_tokens ?? (prompt_tokens + completion_tokens);
 
-    // --- Logging + Token-Abzug ---
-    const svc = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    // 4) Logging + Tokens erhöhen (Service-Role-Client, um RLS zu umgehen)
+    const svc = createClient(SB_URL, SB_SERVICE_ROLE_KEY);
 
-    // 1) ai_usage_log
     await svc.from("ai_usage_log").insert({
       user_id: userId,
       module_id: moduleId,
       provider: "openai",
       model: MODEL,
-      tokens_consumed: usage.total_tokens ?? (usage.prompt_tokens + usage.completion_tokens) ?? 0,
-      prompt_tokens: usage.prompt_tokens ?? 0,
-      completion_tokens: usage.completion_tokens ?? 0,
+      tokens_consumed: total_tokens,
+      prompt_tokens,
+      completion_tokens,
     });
 
-    // 2) token_wallets: tokens_used += total_tokens
-    if ((usage.total_tokens ?? 0) > 0) {
+    if (total_tokens > 0) {
       await svc.rpc("increment_tokens_used", {
         p_user_id: userId,
-        p_delta: usage.total_tokens,
-      }).catch(async () => {
-        // Fallback, falls RPC nicht existiert
-        await svc.from("token_wallets")
-          .upsert({ user_id: userId, tokens_used: usage.total_tokens, tokens_total: 0 }, { onConflict: "user_id" })
-          .select()
-          .then(async (res) => {
-            if (res.error) throw res.error;
-            await svc.from("token_wallets")
-              .update({ updated_at: new Date().toISOString() })
-              .eq("user_id", userId);
-          });
+        p_delta: total_tokens,
       });
     }
 
-    return cors(
-      new Response(JSON.stringify({ ok: true, text, usage }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-  } catch (err) {
+    return withCORS(new Response(JSON.stringify({
+      ok: true,
+      text,
+      usage: { total_tokens, prompt_tokens, completion_tokens }
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+  } catch (err: any) {
     console.error(err);
-    return cors(
-      new Response(JSON.stringify({ ok: false, error: String(err?.message ?? err) }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+    return withCORS(new Response(JSON.stringify({ ok: false, error: String(err?.message ?? err) }), {
+      status: 500, headers: { "Content-Type": "application/json" },
+    }));
   }
 });
