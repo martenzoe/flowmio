@@ -1,5 +1,6 @@
+// src/routes/module/LessonPage.tsx
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { supabase } from "../../lib/supabase";
 import SidebarNav from "../../components/SidebarNav";
 import MultiPrompts from "../../components/MultiPrompts";
@@ -8,6 +9,7 @@ import { useLessonData } from "../../hooks/useLessonData";
 import CompareLesson, { CompareContentJson } from "../../components/lesson/CompareLesson";
 import QuizLesson, { QuizContentJson } from "../../components/lesson/QuizLesson";
 import LikertLesson, { LikertContentJson } from "../../components/lesson/LikertLesson";
+import ReframeLesson, { ReframeContentJson } from "../../components/lesson/ReframeLesson";
 
 export default function LessonPage() {
   const { slug, lessonSlug } = useParams();
@@ -26,6 +28,14 @@ export default function LessonPage() {
     const idx = chapters.findIndex((c) => c.id === lesson.id);
     return idx > 0 ? chapters[idx - 1] : null;
   }, [chapters, lesson]);
+
+  const isChapter = (lesson?.kind ?? "chapter") === "chapter";
+
+  useEffect(() => {
+    if (lesson && moduleRow && !isChapter) {
+      nav(`/app/modules/${moduleRow.slug}`, { replace: true });
+    }
+  }, [isChapter, lesson, moduleRow, nav]);
 
   async function goNext() {
     if (!lesson || !moduleRow) return;
@@ -60,20 +70,15 @@ export default function LessonPage() {
   const hasCompare = Array.isArray((cj as any).compareRows) && (cj as any).compareRows.length > 0;
   const hasQuiz = !!(cj as any).quiz && Array.isArray((cj as any).quiz.options);
   const hasLikert = !!(cj as any).likert && Array.isArray((cj as any).likert.items);
+  const hasReframe =
+    !!(cj as any).reframe &&
+    Array.isArray((cj as any).reframe.blocks) &&
+    Array.isArray((cj as any).reframe.frames) &&
+    typeof (cj as any).reframe.correct === "object";
 
   if (loading) return <div className="p-6">Lade Kapitel…</div>;
   if (!moduleRow || !lesson) return <div className="p-6 text-red-600">Kapitel nicht gefunden.</div>;
-
-  if (lesson.kind !== "chapter") {
-    return (
-      <div className="p-6">
-        <p className="text-sm text-gray-600 mb-2">Diese Seite ist die Einführungsseite. Bitte ein Kapitel aus der Liste öffnen.</p>
-        <Link className="text-blue-600 underline" to={`/app/modules/${moduleRow.slug}`}>
-          Zur Einführungsseite
-        </Link>
-      </div>
-    );
-  }
+  if (!isChapter) return null;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
@@ -89,14 +94,20 @@ export default function LessonPage() {
         <div className="panel">
           <h1 className="text-[22px] font-semibold leading-tight">{lesson.title}</h1>
 
-          {/* Inhalt: interne Weiter-Buttons überall deaktivieren */}
           {hasLikert ? (
             <LikertLesson
-                moduleRow={{ id: moduleRow.id, slug: moduleRow.slug, title: moduleRow.title }}
-                lesson={{ id: lesson.id, slug: lesson.slug, title: lesson.title }}
-                cj={cj as unknown as LikertContentJson}
-                showNext={false}         // ← internen Weiter-Button aus
-                // onNext weglassen, da optional
+              moduleRow={{ id: moduleRow.id, slug: moduleRow.slug, title: moduleRow.title }}
+              lesson={{ id: lesson.id, slug: lesson.slug, title: lesson.title }}
+              cj={cj as unknown as LikertContentJson}
+              showNext={false}
+            />
+          ) : hasReframe ? (
+            <ReframeLesson
+              moduleRow={{ id: moduleRow.id, slug: moduleRow.slug, title: moduleRow.title }}
+              lesson={{ id: lesson.id, slug: lesson.slug, title: lesson.title }}
+              cj={cj as unknown as ReframeContentJson}
+              onNext={goNext}
+              showNext={false}
             />
           ) : hasPrompts ? (
             <MultiPrompts
@@ -104,6 +115,8 @@ export default function LessonPage() {
               lesson={{ id: lesson.id, slug: lesson.slug, title: lesson.title }}
               prompts={(cj as any).prompts}
               lead={(cj as any).lead}
+              body_md={(cj as any).body_md}
+              video={(cj as any).video}
               pageAiPromptType={(cj as any).aiPromptType ?? "motivation"}
               onNext={goNext}
               showNext={false}
@@ -134,21 +147,32 @@ export default function LessonPage() {
             />
           )}
 
-          {/* Zentrale Navigation im Panel */}
           <div className="mt-4 flex items-center justify-between">
             <button onClick={goBack} className="btn btn-primary">Zurück</button>
             {nextChapter ? <button onClick={goNext} className="btn btn-primary">Weiter →</button> : <span />}
           </div>
         </div>
 
+        {/* Abschluss-Kasten (nur beim letzten Kapitel) */}
         {!nextChapter && (
           <div className="panel">
-            <h3 className="font-medium mb-1">Abschluss des Moduls</h3>
-            <p className="text-sm opacity-80">Großartig! Du hast den nächsten wichtigen Schritt gemacht.</p>
+            <h3 className="font-medium mb-2">Abschluss des Moduls</h3>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-slate-200 shrink-0" />
+              <p className="text-sm opacity-80">
+                „Du hast dich deinen inneren Zweifeln gestellt – und bist nicht davongelaufen wie ein
+                scheues Kätzchen. Jetzt, wo die Nebel sich lichten, geht’s an die große Vision.
+                Was willst du wirklich aufbauen? Auf ins nächste Modul!“
+              </p>
+            </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Link to={`/app/modules/${moduleRow.slug}`} className="btn btn-ghost">Zurück zu den Lernzielen</Link>
+              <Link to={`/app/modules/${moduleRow.slug}`} className="btn btn-ghost">
+                Zurück zur Modul-Übersicht
+              </Link>
               {nextModule ? (
-                <Link to={`/app/modules/${nextModule.slug}`} className="btn btn-primary">Weiter zum nächsten Modul</Link>
+                <Link to={`/app/modules/${nextModule.slug}`} className="btn btn-primary">
+                  Weiter zum nächsten Modul
+                </Link>
               ) : (
                 <Link to={phase ? `/app/academy/${phase.slug}` : "/app/academy"} className="btn btn-primary">
                   Zur Phase

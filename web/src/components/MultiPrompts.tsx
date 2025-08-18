@@ -38,15 +38,70 @@ type PromptNorm = {
 
 type BlockState = { id: string; text: string };
 
-function Spinner({ className = "h-4 w-4" }: { className?: string }) {
+// --------- Video ----------
+type VideoSpec = {
+  kind?: "placeholder" | "youtube" | "vimeo" | "file";
+  url?: string;
+  poster?: string;
+  title?: string;
+};
+
+function VideoBlock({ video }: { video?: VideoSpec }) {
+  if (!video) return null;
+
+  // Placeholder
+  if (!video.url || video.kind === "placeholder") {
+    return (
+      <div
+        className="aspect-video w-full rounded-xl bg-slate-900 relative overflow-hidden grid place-items-center"
+        role="img"
+        aria-label={video.title ?? "Video folgt"}
+      >
+        {video.poster && (
+          <img
+            src={video.poster}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-60"
+          />
+        )}
+        <div className="z-10 flex flex-col items-center text-white">
+          <div className="h-14 w-14 rounded-full bg-white/15 grid place-items-center backdrop-blur border border-white/30">
+            <span className="text-2xl leading-none">▶</span>
+          </div>
+          <div className="mt-2 text-xs opacity-80">Video folgt</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Optional: YouTube/Vimeo/File einbettung (falls später URL gesetzt wird)
+  const url = video.url;
+  if (video.kind === "youtube" || (url?.includes("youtube.com") || url?.includes("youtu.be"))) {
+    const embed = url
+      .replace("watch?v=", "embed/")
+      .replace("youtu.be/", "www.youtube.com/embed/");
+    return (
+      <iframe
+        className="aspect-video w-full rounded-xl"
+        src={embed}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        title={video.title ?? "YouTube Video"}
+      />
+    );
+  }
+
   return (
-    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-    </svg>
+    <video
+      className="aspect-video w-full rounded-xl bg-black"
+      src={url}
+      controls
+      poster={video.poster}
+    />
   );
 }
 
+// wandelt wörtliche "\n" aus JSON in echte Umbrüche
 function normalize(text?: string) {
   return (text ?? "").replace(/\\n/g, "\n");
 }
@@ -56,6 +111,8 @@ export default function MultiPrompts({
   lesson,
   prompts,
   lead,
+  body_md,
+  video,                     // ← NEU
   pageAiPromptType = "motivation",
   onNext,
   showNext = true,
@@ -64,6 +121,8 @@ export default function MultiPrompts({
   lesson: Lesson;
   prompts: PromptWire[];
   lead?: string;
+  body_md?: string;
+  video?: VideoSpec;         // ← NEU
   pageAiPromptType?: string;
   onNext: () => Promise<void> | void;
   showNext?: boolean;
@@ -187,6 +246,20 @@ export default function MultiPrompts({
     <>
       {lead && <p className="mt-3 text-sm opacity-80">{lead}</p>}
 
+      {/* Video oben */}
+      <div className="mt-3">
+        <VideoBlock video={video} />
+      </div>
+
+      {/* Info/Callout aus body_md */}
+      {body_md && (
+        <div className="mt-3 rounded-xl bg-slate-50 border border-slate-200 p-3">
+          <div className="text-sm opacity-80 whitespace-pre-line">
+            {normalize(body_md)}
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 space-y-5">
         {norm.map((p) => {
           const val = blocks.find((b) => b.id === p.id)?.text ?? "";
@@ -194,12 +267,7 @@ export default function MultiPrompts({
 
           return (
             <div key={p.id} className="rounded-xl border border-slate-200/60 shadow-sm p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="font-medium">{p.question}</div>
-                <button onClick={() => clearBlock(p.id)} className="text-xs text-gray-500 hover:underline">
-                  Antwort hier löschen
-                </button>
-              </div>
+              <div className="font-medium">{normalize(p.question)}</div>
 
               <textarea
                 value={val}
@@ -226,17 +294,13 @@ export default function MultiPrompts({
                   className={`btn btn-ghost ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
                   title={disabled ? "Bitte zuerst etwas eintragen" : "Formulierung mit KI verbessern"}
                 >
-                  {aiLoading === p.id ? (
-                    <>
-                      <Spinner />
-                      <span>Optimieren…</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>✨</span>
-                      <span>Mit KI optimieren</span>
-                    </>
-                  )}
+                  {aiLoading === p.id ? "Optimieren…" : "✨ Mit KI optimieren"}
+                </button>
+                <button
+                  onClick={() => clearBlock(p.id)}
+                  className="ml-2 text-xs text-gray-500 hover:underline"
+                >
+                  Antwort hier löschen
                 </button>
               </div>
             </div>

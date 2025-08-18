@@ -1,3 +1,4 @@
+// src/routes/module/ModuleLayout.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
@@ -9,6 +10,7 @@ type Lesson = {
   order_index: number;
   kind: "intro" | "chapter";
   body_md: string | null;
+  content_json: any | null;
 };
 
 type ModuleRow = {
@@ -23,6 +25,24 @@ type ModuleRow = {
 type Phase = { id: string; title: string; slug: string };
 type Ump = { module_id: string; completed: boolean | null };
 
+// Helpers
+function normalizeText(raw?: string) {
+  if (!raw) return "";
+  // CRLF -> LF & wörtliche "\n" in echte Umbrüche
+  let s = raw.replace(/\r\n/g, "\n").replace(/\\n/g, "\n").trim();
+  // Falls jemand „Flowmioo's Intro“ in den Fließtext kopiert hat: raus damit
+  s = s.replace(/^\s*Flowmioo[’'`]?s Intro\s*/i, "");
+  return s;
+}
+function toParagraphs(raw?: string): string[] {
+  const s = normalizeText(raw);
+  if (!s) return [];
+  return s
+    .split(/\n{2,}/)                 // Absätze = 2+ Umbrüche
+    .map((p) => p.replace(/\s*\n\s*/g, " ").trim()) // einzelne Umbrüche = Leerzeichen
+    .filter(Boolean);
+}
+
 export default function ModuleLayout() {
   const { slug } = useParams();
   const [moduleRow, setModuleRow] = useState<ModuleRow | null>(null);
@@ -31,6 +51,7 @@ export default function ModuleLayout() {
   const [phaseModules, setPhaseModules] = useState<ModuleRow[]>([]);
   const [userProgress, setUserProgress] = useState<Record<string, Ump>>({});
   const [loading, setLoading] = useState(true);
+  const [openStory, setOpenStory] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -42,8 +63,9 @@ export default function ModuleLayout() {
         .from("modules")
         .select("id,title,slug,description,phase_id,order_index")
         .eq("slug", slug)
-        .single();
+        .maybeSingle();
       if (!alive) return;
+      if (!mod) return setLoading(false);
       setModuleRow(mod as ModuleRow);
 
       // Phase
@@ -62,15 +84,15 @@ export default function ModuleLayout() {
         .order("order_index", { ascending: true });
       if (alive) setPhaseModules((pMods ?? []) as ModuleRow[]);
 
-      // Lessons
+      // Lessons (mit content_json!)
       const { data: ls } = await supabase
         .from("module_lessons")
-        .select("id,slug,title,order_index,kind,body_md")
+        .select("id,slug,title,order_index,kind,body_md,content_json")
         .eq("module_id", mod?.id)
         .order("order_index", { ascending: true });
       if (alive) setLessons((ls ?? []) as Lesson[]);
 
-      // (optional) User-Progress
+      // Progress
       const { data: u } = await supabase.auth.getUser();
       if (u.user?.id && pMods?.length) {
         const { data: ump } = await supabase
@@ -103,7 +125,19 @@ export default function ModuleLayout() {
   if (loading) return <div className="p-6">Lade Modul…</div>;
   if (!moduleRow) return <div className="p-6 text-red-600">Modul nicht gefunden.</div>;
 
-  const tips = getTipsForModule(moduleRow.slug);
+  // ---- Intro-Inhalt: **body_md hat Vorrang** vor content_json.tip ----
+  const cj = (intro?.content_json ?? {}) as {
+    lead?: string;
+    tip?: string;
+    goals?: string[];
+    cta?: { label?: string };
+    story?: { title?: string; body_md?: string };
+  };
+  const introTextSource = intro?.body_md && intro.body_md.trim().length > 0
+    ? intro.body_md
+    : (cj.tip ?? "In diesem Modul arbeitest du fokussiert an einem klaren Schritt.");
+  const introTextParas = toParagraphs(introTextSource);
+  const storyParas = toParagraphs(cj.story?.body_md);
 
   return (
     <div className="layout-3col">
@@ -124,11 +158,7 @@ export default function ModuleLayout() {
               {intro?.title && <div className="text-xs text-gray-500 mt-0.5">{intro.title}</div>}
             </Link>
             {chapters.map((c, idx) => (
-              <Link
-                key={c.id}
-                to={`/app/modules/${moduleRow.slug}/lesson/${c.slug}`}
-                className="nav-item"
-              >
+              <Link key={c.id} to={`/app/modules/${moduleRow.slug}/lesson/${c.slug}`} className="nav-item">
                 <div className="text-[11px] opacity-60">{`Kapitel ${idx + 1}`}</div>
                 <div className="text-sm font-medium leading-tight">{c.title}</div>
               </Link>
@@ -156,52 +186,53 @@ export default function ModuleLayout() {
             ) : null}
           </div>
 
-          {intro && (
-            <div className="mt-4 muted">
-              <div className="font-medium mb-1">Flowmioo's Intro</div>
-              <p className="text-sm opacity-80 whitespace-pre-wrap">
-                {intro.body_md?.length
-                  ? intro.body_md
-                  : "In diesem Modul arbeitest du fokussiert an einem klaren Schritt."}
-              </p>
+          {/* Intro-Box */}
+          <div className="mt-4 rounded-2xl bg-slate-100 border border-slate-200 p-5">
+            <div className="font-medium mb-2">Flowmioo&apos;s Intro</div>
+            <div className="space-y-2 text-sm opacity-80">
+              {introTextParas.map((p, i) => <p key={i}>{p}</p>)}
             </div>
-          )}
+            {cj.cta && cj.story?.body_md ? (
+              <div className="mt-3">
+                <button
+                  onClick={() => setOpenStory(true)}
+                  className="inline-flex items-center justify-center rounded-xl px-4 py-2 font-medium shadow-sm bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  {cj.cta.label ?? "Geschichte lesen"}
+                </button>
+              </div>
+            ) : null}
+          </div>
 
+          {/* Lernziele */}
           <div className="mt-4">
             <h3 className="font-semibold mb-2">Lernziel</h3>
-                <p className="text-sm opacity-80">
-                Du findest dein echtes Warum – klar, persönlich, motivierend. Keine Floskeln, sondern dein echter Antrieb:
-                Wofür stehst du morgens auf? Warum willst du gründen? Und wofür lohnt sich jede Mühe?
-                </p>
+            {cj.lead ? (
+              <p className="text-sm opacity-80">{cj.lead}</p>
+            ) : (
+              <p className="text-sm opacity-80">
+                Kurze Beschreibung, was du nach dem Modul sicher kannst.
+              </p>
+            )}
 
             <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <CardN
-                n={1}
-                text="Dein persönliches Warum entdecken und schriftlich klar formulieren."
-              />
-              <CardN
-                n={2}
-                text="Motivation langfristig festhalten, um Durchhänger sicher zu überstehen."
-              />
-              <CardN
-                n={3}
-                text="Die Grundlage für alle künftigen Entscheidungen im Business legen."
-              />
+              {(cj.goals?.length ? cj.goals : [
+                "Dein persönliches Warum entdecken und schriftlich klar formulieren.",
+                "Motivation langfristig festhalten, um Durchhänger sicher zu überstehen.",
+                "Die Grundlage für alle künftigen Entscheidungen im Business legen.",
+              ]).map((text, i) => (
+                <CardN key={i} n={i + 1} text={text} />
+              ))}
             </div>
 
-            {/* Weiter/Start-Button */}
+            {/* Start / Weiter */}
             <div className="mt-6 flex justify-end">
               {firstChapter ? (
-                <Link
-                  to={`/app/modules/${moduleRow.slug}/lesson/${firstChapter.slug}`}
-                  className="btn btn-primary"
-                >
-                  Jetzt starten
+                <Link to={`/app/modules/${moduleRow.slug}/lesson/${firstChapter.slug}`} className="btn btn-primary">
+                  Weiter
                 </Link>
               ) : (
-                <button className="btn btn-primary opacity-50 cursor-not-allowed">
-                  Noch kein Kapitel
-                </button>
+                <button className="btn btn-primary opacity-50 cursor-not-allowed">Noch kein Kapitel</button>
               )}
             </div>
           </div>
@@ -213,10 +244,8 @@ export default function ModuleLayout() {
         <div className="panel">
           <h3 className="font-medium">Flowmioo-Tipps</h3>
           <div className="mt-3 space-y-2">
-            {tips.map((t, i) => (
-              <div key={i} className="tip">
-                {t}
-              </div>
+            {getTipsForModule(moduleRow.slug).map((t, i) => (
+              <div key={i} className="tip">{t}</div>
             ))}
           </div>
         </div>
@@ -226,11 +255,7 @@ export default function ModuleLayout() {
           <div className="mt-3 space-y-3">
             {phaseModules.map((m, i) => {
               const st = userProgress[m.id];
-              const label = st?.completed
-                ? "Abgeschlossen"
-                : st
-                ? "In Bearbeitung"
-                : "Nicht begonnen";
+              const label = st?.completed ? "Abgeschlossen" : st ? "In Bearbeitung" : "Nicht begonnen";
               const pct = st?.completed ? 100 : st ? 40 : 10;
               return (
                 <div key={m.id}>
@@ -249,12 +274,29 @@ export default function ModuleLayout() {
           <button className="mt-4 w-full rounded-lg bg-white shadow px-3 py-2 text-sm hover:brightness-105">
             Frag Flowmioo
           </button>
-          <input
-            className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
-            placeholder="Stelle deine Frage…"
-          />
+          <input className="mt-2 w-full rounded-lg border px-3 py-2 text-sm" placeholder="Stelle deine Frage…" />
         </div>
       </aside>
+
+      {/* STORY MODAL */}
+      {openStory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="w-full max-w-2xl max-h-[85vh] overflow-auto rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">{cj.story?.title ?? "Geschichte"}</h2>
+              <button onClick={() => setOpenStory(false)} className="px-2 py-1 rounded-lg hover:bg-slate-100" aria-label="Schließen">✕</button>
+            </div>
+            <div className="p-5 text-slate-800">
+              <div className="space-y-3 text-[15px] leading-7">
+                {storyParas.map((p, i) => <p key={i}>{p}</p>)}
+              </div>
+            </div>
+            <div className="p-4 border-t text-right">
+              <button onClick={() => setOpenStory(false)} className="btn btn-primary">Schließen</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
