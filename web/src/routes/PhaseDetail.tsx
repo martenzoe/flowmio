@@ -47,7 +47,7 @@ export default function PhaseDetail() {
           .eq('phase_id', p.id)
           .order('order_index', { ascending: true });
 
-        setModules(mods ?? []);
+        setModules((mods ?? []) as ModuleRow[]);
       } else {
         setModules([]);
       }
@@ -63,8 +63,15 @@ export default function PhaseDetail() {
       {/* Hauptspalte */}
       <div className="lg:col-span-8 space-y-4">
         <div className="panel">
-          <h1 className="text-xl md:text-2xl font-semibold">{phase.title}</h1>
-          {phase.description && <p className="text-sm opacity-80 mt-2">{phase.description}</p>}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-xl md:text-2xl font-semibold">{phase.title}</h1>
+              {phase.description && <p className="text-sm opacity-80 mt-2">{phase.description}</p>}
+            </div>
+            <Link to={`/app/academy/${phase.slug}/export`} className="btn btn-ghost">
+              Als PDF speichern
+            </Link>
+          </div>
 
           {/* Video/Intro Platzhalter */}
           <div className="mt-4 aspect-video w-full rounded-xl bg-slate-100 grid place-items-center text-sm text-slate-500">

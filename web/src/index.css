@@ -93,3 +93,12 @@ body { margin: 0; }
     /* Progress-Füllung in Brand */
     .progress-val{ background:var(--brand-600); }
   }
+  /* ---------- Print (PDF-Export) ---------- */
+@media print {
+  .no-print { display: none !important; }
+  html, body { background: #fff !important; }
+  .print-page { page-break-after: always; }
+  .print-page:last-child { page-break-after: auto; }
+  .break-inside-avoid { break-inside: avoid; }
+  .print-answer { white-space: pre-wrap; }
+}

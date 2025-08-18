@@ -13,6 +13,7 @@ import AppShell from "./app/AppShell";
 import Dashboard from "./routes/Dashboard";
 import AcademyIndex from "./routes/AcademyIndex";
 import PhaseDetail from "./routes/PhaseDetail";
+import PhaseExport from "./routes/PhaseExport"; // <-- NEU
 
 // Module
 import ModuleLayout from "./routes/module/ModuleLayout";
@@ -59,12 +60,13 @@ export default function App() {
           {/* Gründer-Akademie */}
           <Route path="academy" element={<AcademyIndex />} />
           <Route path="academy/:phaseSlug" element={<PhaseDetail />} />
+          <Route path="academy/:phaseSlug/export" element={<PhaseExport />} /> {/* <-- NEU */}
 
-          {/* === OFFIZIELLE Modul-Routen (konsistent mit deinen Links) === */}
+          {/* Modul-Routen */}
           <Route path="modules/:slug" element={<ModuleLayout />} />
           <Route path="modules/:slug/lesson/:lessonSlug" element={<LessonPage />} />
 
-          {/* === BACKWARD-COMPAT: falls von PhaseDetail nach /academy/:phaseSlug/:slug verlinkt wird === */}
+          {/* Backward-Compat */}
           <Route path="academy/:phaseSlug/:slug" element={<ModuleLayout />} />
           <Route path="academy/:phaseSlug/:slug/lesson/:lessonSlug" element={<LessonPage />} />
         </Route>
