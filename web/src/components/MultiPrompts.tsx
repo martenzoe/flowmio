@@ -101,9 +101,9 @@ function VideoBlock({ video }: { video?: VideoSpec }) {
   );
 }
 
-// wandelt wörtliche "\n" aus JSON in echte Umbrüche
+// wandelt wörtliche "\n" aus JSON in echte Umbrüche (und CRLF → LF)
 function normalize(text?: string) {
-  return (text ?? "").replace(/\\n/g, "\n");
+  return (text ?? "").replace(/\r\n/g, "\n").replace(/\\n/g, "\n");
 }
 
 export default function MultiPrompts({
@@ -127,7 +127,7 @@ export default function MultiPrompts({
   onNext: () => Promise<void> | void;
   showNext?: boolean;
 }) {
-  const norm: PromptNorm[] = useMemo(() => {
+  const norm: PromptNorm[] = useMemo((): PromptNorm[] => {
     return (prompts as PromptWire[]).map((p, i): PromptNorm => ({
       id: p.id ?? `q${i + 1}`,
       type: p.type ?? "textarea",
@@ -244,7 +244,11 @@ export default function MultiPrompts({
 
   return (
     <>
-      {lead && <p className="mt-3 text-sm opacity-80">{lead}</p>}
+      {lead && (
+        <p className="mt-3 text-sm opacity-80 whitespace-pre-line">
+          {normalize(lead)}
+        </p>
+      )}
 
       {/* Video oben */}
       <div className="mt-3">

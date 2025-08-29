@@ -1,3 +1,4 @@
+// src/components/ChapterFallback.tsx
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 
@@ -16,6 +17,89 @@ export type ContentJson = {
 
   // Lernziele als Karten
   goals?: string[];
+
+  // 🔹 Video oben im Kapitel (neu)
+  video?: VideoSpec;
+};
+
+// 🔹 Videospezifikation (neu)
+type VideoSpec = {
+  kind?: "placeholder" | "youtube" | "vimeo" | "file";
+  url?: string;
+  poster?: string;
+  title?: string;
+};
+
+// 🔹 Kleiner Video-Block mit Placeholder/YT/File (neu)
+function VideoBlock({ video }: { video?: VideoSpec }) {
+  if (!video) return null;
+
+  // Platzhalter, solange noch kein echtes Video hochgeladen wurde
+  if (!video.url || video.kind === "placeholder") {
+    return (
+      <div
+        className="aspect-video w-full rounded-xl bg-slate-900 relative overflow-hidden grid place-items-center"
+        role="img"
+        aria-label={video.title ?? "Video folgt"}
+      >
+        {video.poster && (
+          <img
+            src={video.poster}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-60"
+          />
+        )}
+        <div className="z-10 flex flex-col items-center text-white">
+          <div className="h-14 w-14 rounded-full bg-white/15 grid place-items-center backdrop-blur border border-white/30">
+            <span className="text-2xl leading-none">▶</span>
+          </div>
+          <div className="mt-2 text-xs opacity-80">Video folgt</div>
+        </div>
+      </div>
+    );
+  }
+
+  const url = video.url;
+
+  // YouTube
+  if (video.kind === "youtube" || url?.includes("youtube.com") || url?.includes("youtu.be")) {
+    const embed = url
+      .replace("watch?v=", "embed/")
+      .replace("youtu.be/", "www.youtube.com/embed/");
+    return (
+      <iframe
+        className="aspect-video w-full rounded-xl"
+        src={embed}
+        title={video.title ?? "YouTube Video"}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    );
+  }
+
+  // Vimeo (einfach: direkte URL wird im iframe verwendet)
+  if (video.kind === "vimeo" || url?.includes("vimeo.com")) {
+    const vimeoEmbed = url.includes("player.vimeo.com") ? url : url.replace("vimeo.com/", "player.vimeo.com/video/");
+    return (
+      <iframe
+        className="aspect-video w-full rounded-xl"
+        src={vimeoEmbed}
+        title={video.title ?? "Vimeo Video"}
+        allow="autoplay; fullscreen; picture-in-picture"
+        allowFullScreen
+      />
+    );
+  }
+
+  // Datei (mp4/webm)
+  return (
+    <video
+      className="aspect-video w-full rounded-xl bg-black"
+      src={url}
+      controls
+      poster={video.poster}
+    />
+  );
 };
 
 // Hilfsfunktion: Paragraphenerkennung + Soft-Umbrüche glätten
@@ -137,6 +221,11 @@ export default function ChapterFallback({
 
   return (
     <>
+      {/* 🔹 Video ganz oben */}
+      <div className="mt-2">
+        <VideoBlock video={cj.video} />
+      </div>
+
       {/* Lead-Zeile */}
       {cj.lead && <p className="mt-3 text-sm opacity-80">{cj.lead}</p>}
 
@@ -222,7 +311,7 @@ export default function ChapterFallback({
               </button>
             </div>
 
-            {/* Hier: Paragraphen statt harter Umbrüche */}
+            {/* Paragraphen statt harter Umbrüche */}
             <div className="p-5 text-slate-800">
               <div className="space-y-3 text-[15px] leading-7">
                 {storyParagraphs.map((p, i) => (

@@ -76,6 +76,18 @@ export default function LessonPage() {
     Array.isArray((cj as any).reframe.frames) &&
     typeof (cj as any).reframe.correct === "object";
 
+  // --- Abschluss-Text pro Modul aus dem Intro-JSON ---
+  const closingText: string = useMemo(() => {
+    const introJson = (intro?.content_json ?? {}) as any;
+    // bevorzugt "closing_md" (mehrzeilig), sonst Alternativen, sonst Fallback
+    return (
+      (typeof introJson?.closing_md === "string" && introJson.closing_md.trim()) ||
+      (typeof introJson?.closing === "string" && introJson.closing.trim()) ||
+      (typeof introJson?.closing_tip === "string" && introJson.closing_tip.trim()) ||
+      "Super! Dieses Modul ist abgeschlossen. Nimm deinen wichtigsten Takeaway mit – und weiter geht’s."
+    );
+  }, [intro?.content_json]);
+
   if (loading) return <div className="p-6">Lade Kapitel…</div>;
   if (!moduleRow || !lesson) return <div className="p-6 text-red-600">Kapitel nicht gefunden.</div>;
   if (!isChapter) return null;
@@ -157,14 +169,12 @@ export default function LessonPage() {
         {!nextChapter && (
           <div className="panel">
             <h3 className="font-medium mb-2">Abschluss des Moduls</h3>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-slate-200 shrink-0" />
-              <p className="text-sm opacity-80">
-                „Du hast dich deinen inneren Zweifeln gestellt – und bist nicht davongelaufen wie ein
-                scheues Kätzchen. Jetzt, wo die Nebel sich lichten, geht’s an die große Vision.
-                Was willst du wirklich aufbauen? Auf ins nächste Modul!“
-              </p>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              {/* whitespace-pre-line: Zeilenumbrüche aus JSON respektieren */}
+              <p className="text-sm opacity-80 whitespace-pre-line">{closingText}</p>
             </div>
+
             <div className="mt-3 flex flex-wrap gap-2">
               <Link to={`/app/modules/${moduleRow.slug}`} className="btn btn-ghost">
                 Zurück zur Modul-Übersicht
@@ -174,7 +184,10 @@ export default function LessonPage() {
                   Weiter zum nächsten Modul
                 </Link>
               ) : (
-                <Link to={phase ? `/app/academy/${phase.slug}` : "/app/academy"} className="btn btn-primary">
+                <Link
+                  to={phase ? `/app/academy/${phase.slug}` : "/app/academy"}
+                  className="btn btn-primary"
+                >
                   Zur Phase
                 </Link>
               )}

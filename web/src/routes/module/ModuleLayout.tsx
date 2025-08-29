@@ -38,7 +38,7 @@ function toParagraphs(raw?: string): string[] {
   const s = normalizeText(raw);
   if (!s) return [];
   return s
-    .split(/\n{2,}/)                 // Absätze = 2+ Umbrüche
+    .split(/\n{2,}/) // Absätze = 2+ Umbrüche
     .map((p) => p.replace(/\s*\n\s*/g, " ").trim()) // einzelne Umbrüche = Leerzeichen
     .filter(Boolean);
 }
@@ -125,18 +125,26 @@ export default function ModuleLayout() {
   if (loading) return <div className="p-6">Lade Modul…</div>;
   if (!moduleRow) return <div className="p-6 text-red-600">Modul nicht gefunden.</div>;
 
-  // ---- Intro-Inhalt: **body_md hat Vorrang** vor content_json.tip ----
+  // ---- Intro-Inhalt
   const cj = (intro?.content_json ?? {}) as {
     lead?: string;
+    body_md?: string; // ★ Lernziel-Text kommt aus body_md in content_json
     tip?: string;
     goals?: string[];
     cta?: { label?: string };
     story?: { title?: string; body_md?: string };
   };
-  const introTextSource = intro?.body_md && intro.body_md.trim().length > 0
-    ? intro.body_md
-    : (cj.tip ?? "In diesem Modul arbeitest du fokussiert an einem klaren Schritt.");
+
+  // Flowmioo-Intro: body_md Spalte des *Lesson*-Records (falls genutzt) hat Vorrang,
+  // sonst tip aus content_json
+  const introTextSource =
+    intro?.body_md && intro.body_md.trim().length > 0
+      ? intro.body_md
+      : cj.tip ?? "In diesem Modul arbeitest du fokussiert an einem klaren Schritt.";
   const introTextParas = toParagraphs(introTextSource);
+
+  // ★ Lernziel-Absatz(e): erst content_json.body_md, sonst fallback auf lead
+  const lernzielParas = toParagraphs(cj.body_md ?? cj.lead);
   const storyParas = toParagraphs(cj.story?.body_md);
 
   return (
@@ -190,13 +198,15 @@ export default function ModuleLayout() {
           <div className="mt-4 rounded-2xl bg-slate-100 border border-slate-200 p-5">
             <div className="font-medium mb-2">Flowmioo&apos;s Intro</div>
             <div className="space-y-2 text-sm opacity-80">
-              {introTextParas.map((p, i) => <p key={i}>{p}</p>)}
+              {introTextParas.map((p, i) => (
+                <p key={i}>{p}</p>
+              ))}
             </div>
             {cj.cta && cj.story?.body_md ? (
               <div className="mt-3">
                 <button
                   onClick={() => setOpenStory(true)}
-                  className="inline-flex items-center justify-center rounded-xl px-4 py-2 font-medium shadow-sm bg-blue-600 text-white hover:bg-blue-700"
+                  className="inline-flex items-center justify-center rounded-XL px-4 py-2 font-medium shadow-sm bg-blue-600 text-white hover:bg-blue-700"
                 >
                   {cj.cta.label ?? "Geschichte lesen"}
                 </button>
@@ -207,8 +217,14 @@ export default function ModuleLayout() {
           {/* Lernziele */}
           <div className="mt-4">
             <h3 className="font-semibold mb-2">Lernziel</h3>
-            {cj.lead ? (
-              <p className="text-sm opacity-80">{cj.lead}</p>
+
+            {/* ★ body_md (mehrzeilig) sauber ausgeben; Fallback-Text wenn leer */}
+            {lernzielParas.length ? (
+              <div className="text-sm opacity-80 space-y-2">
+                {lernzielParas.map((p, i) => (
+                  <p key={i}>{p}</p>
+                ))}
+              </div>
             ) : (
               <p className="text-sm opacity-80">
                 Kurze Beschreibung, was du nach dem Modul sicher kannst.
@@ -216,11 +232,14 @@ export default function ModuleLayout() {
             )}
 
             <div className="mt-3 grid gap-3 md:grid-cols-3">
-              {(cj.goals?.length ? cj.goals : [
-                "Dein persönliches Warum entdecken und schriftlich klar formulieren.",
-                "Motivation langfristig festhalten, um Durchhänger sicher zu überstehen.",
-                "Die Grundlage für alle künftigen Entscheidungen im Business legen.",
-              ]).map((text, i) => (
+              {(cj.goals?.length
+                ? cj.goals
+                : [
+                    "Du entwickelst ein klares Bild deiner Unternehmer-Vision.",
+                    "Du verstehst, warum Visualisierung dein stärkster Motivator ist.",
+                    "Du formulierst konkrete Ziele, die dich in Aktion bringen.",
+                  ]
+              ).map((text, i) => (
                 <CardN key={i} n={i + 1} text={text} />
               ))}
             </div>
@@ -245,7 +264,9 @@ export default function ModuleLayout() {
           <h3 className="font-medium">Flowmioo-Tipps</h3>
           <div className="mt-3 space-y-2">
             {getTipsForModule(moduleRow.slug).map((t, i) => (
-              <div key={i} className="tip">{t}</div>
+              <div key={i} className="tip">
+                {t}
+              </div>
             ))}
           </div>
         </div>
@@ -284,15 +305,25 @@ export default function ModuleLayout() {
           <div className="w-full max-w-2xl max-h-[85vh] overflow-auto rounded-2xl bg-white shadow-xl">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-lg font-semibold">{cj.story?.title ?? "Geschichte"}</h2>
-              <button onClick={() => setOpenStory(false)} className="px-2 py-1 rounded-lg hover:bg-slate-100" aria-label="Schließen">✕</button>
+              <button
+                onClick={() => setOpenStory(false)}
+                className="px-2 py-1 rounded-lg hover:bg-slate-100"
+                aria-label="Schließen"
+              >
+                ✕
+              </button>
             </div>
             <div className="p-5 text-slate-800">
               <div className="space-y-3 text-[15px] leading-7">
-                {storyParas.map((p, i) => <p key={i}>{p}</p>)}
+                {storyParas.map((p, i) => (
+                  <p key={i}>{p}</p>
+                ))}
               </div>
             </div>
             <div className="p-4 border-t text-right">
-              <button onClick={() => setOpenStory(false)} className="btn btn-primary">Schließen</button>
+              <button onClick={() => setOpenStory(false)} className="btn btn-primary">
+                Schließen
+              </button>
             </div>
           </div>
         </div>
