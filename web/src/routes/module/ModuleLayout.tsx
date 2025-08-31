@@ -8,9 +8,9 @@ type Lesson = {
   slug: string;
   title: string | null;
   order_index: number;
-  kind: string; // tolerant: "intro" | "chapter"
+  kind: string;
   body_md: string | null;
-  content_json: any | null; // object ODER string
+  content_json: any | null;
 };
 
 type ModuleRow = {
@@ -23,13 +23,11 @@ type ModuleRow = {
 };
 
 type Phase = { id: string; title: string; slug: string };
-type Ump = { module_id: string; completed: boolean | null };
+type Ump   = { module_id: string; completed: boolean | null };
 
-// ---------------- Helpers ----------------
 function normalizeText(raw?: string | null) {
   if (!raw) return "";
   let s = String(raw).replace(/\r\n/g, "\n").replace(/\\n/g, "\n").trim();
-  // Falls jemand die Überschrift ins Feld kopiert hat: entfernen
   s = s.replace(/^\s*Flowmioo[’'`]?s Intro\s*/i, "");
   return s;
 }
@@ -38,17 +36,20 @@ function toParagraphs(raw?: string | null): string[] {
   if (!s) return [];
   return s.split(/\n{2,}/).map((p) => p.replace(/\s*\n\s*/g, " ").trim()).filter(Boolean);
 }
+function firstNonEmpty(...vals: Array<string | null | undefined>) {
+  for (const v of vals) {
+    const n = normalizeText(v ?? "");
+    if (n && n.trim().length > 0) return n;
+  }
+  return "";
+}
 function formatPhaseLine(phase?: Phase | null) {
   if (!phase) return "";
-  const num =
-    phase.slug?.match(/\d+/)?.[0] ??
-    phase.title?.match(/\d+/)?.[0] ??
-    "";
+  const num = phase.slug?.match(/\d+/)?.[0] ?? phase.title?.match(/\d+/)?.[0] ?? "";
   const title = (phase.title ?? "").replace(/^PHASE\s*\d+\s*:\s*/i, "").trim();
   return `PHASE ${num}: ${title}`;
 }
 
-// ---------------- Component ----------------
 export default function ModuleLayout() {
   const { slug } = useParams();
   const [moduleRow, setModuleRow] = useState<ModuleRow | null>(null);
@@ -64,7 +65,6 @@ export default function ModuleLayout() {
     (async () => {
       setLoading(true);
 
-      // Modul
       const { data: mod } = await supabase
         .from("modules")
         .select("id,title,slug,description,phase_id,order_index")
@@ -74,7 +74,6 @@ export default function ModuleLayout() {
       if (!mod) { setLoading(false); return; }
       setModuleRow(mod as ModuleRow);
 
-      // Phase
       const { data: ph } = await supabase
         .from("phases")
         .select("id,title,slug")
@@ -82,7 +81,6 @@ export default function ModuleLayout() {
         .maybeSingle();
       if (alive) setPhase((ph ?? null) as Phase | null);
 
-      // Module der Phase
       const { data: pMods } = await supabase
         .from("modules")
         .select("id,title,slug,description,order_index,phase_id")
@@ -90,7 +88,6 @@ export default function ModuleLayout() {
         .order("order_index", { ascending: true });
       if (alive) setPhaseModules((pMods ?? []) as ModuleRow[]);
 
-      // Lessons (Intro & Kapitel)
       const { data: ls } = await supabase
         .from("module_lessons")
         .select("id,slug,title,order_index,kind,body_md,content_json")
@@ -98,7 +95,6 @@ export default function ModuleLayout() {
         .order("order_index", { ascending: true });
       if (alive) setLessons((ls ?? []) as Lesson[]);
 
-      // Progress
       const { data: u } = await supabase.auth.getUser();
       if (u?.user?.id && pMods?.length) {
         const { data: ump } = await supabase
@@ -116,72 +112,66 @@ export default function ModuleLayout() {
     return () => { alive = false; };
   }, [slug]);
 
-  // ---------- Hooks (immer vor Early-Returns!) ----------
-  // Intro robust finden
+  // Intro robuster finden
   const intro = useMemo(() => {
-    if (!lessons.length) return null;
-    // 1) bevorzugt "einleitung"
-    const bySlug = lessons.find((l) => (l.slug ?? "").trim().toLowerCase() === "einleitung");
+    const l = lessons ?? [];
+    if (!l.length) return null;
+    const bySlug = l.find(x => `${x.slug ?? ""}`.trim().toLowerCase() === "einleitung");
     if (bySlug) return bySlug;
-    // 2) sonst kind === intro
-    const byKind = lessons.find((l) => (l.kind ?? "").toString().trim().toLowerCase() === "intro");
-    return byKind ?? null;
+    const byKind = l.find(x => `${x.kind ?? ""}`.trim().toLowerCase() === "intro");
+    if (byKind) return byKind;
+    const byOrder1 = l.find(x => Number(x.order_index) === 1);
+    return byOrder1 ?? l[0] ?? null;
   }, [lessons]);
 
-  // Kapitel
+  // Kapitel: ALLES außer Intro anzeigen (damit erscheinen auch persona/lesson/leer)
   const chapters = useMemo(
-    () => lessons.filter((l) => (l.kind ?? "").toString().trim().toLowerCase() === "chapter"),
+    () =>
+      (lessons ?? []).filter((l) => {
+        const k = (l.kind ?? "").toString().trim().toLowerCase();
+        return k !== "intro"; // restliche Seiten sind navigierbare Kapitel
+      }),
     [lessons]
   );
   const firstChapter = useMemo(() => (chapters.length ? chapters[0] : null), [chapters]);
 
-  // Modulindex in Phase
   const modIndexInPhase = useMemo(() => {
     if (!moduleRow || !phaseModules.length) return null;
     const idx = phaseModules.findIndex((m) => m.id === moduleRow.id);
     return idx >= 0 ? idx + 1 : null;
   }, [moduleRow, phaseModules]);
 
-  // content_json sicher parsen
   const cj = useMemo(() => {
     const raw = intro?.content_json;
     if (!raw) return {} as any;
     if (typeof raw === "string") {
       try { return JSON.parse(raw); } catch { return {}; }
     }
-    return (raw ?? {}) as any;
+    return (typeof raw === "object" && raw !== null ? raw : {}) as any;
   }, [intro]);
 
-  // ---------- Early-Returns ----------
   if (loading) return <div className="p-6">Lade Modul…</div>;
   if (!moduleRow) return <div className="p-6 text-red-600">Modul nicht gefunden.</div>;
 
-  // ---------- Inhalte ----------
-  // Flowmioo's Intro: body_md → tip → lead → modul.description
-  const introTextSource =
-    normalizeText(intro?.body_md) ||
-    normalizeText(cj.tip) ||
-    normalizeText(cj.lead) ||
-    normalizeText(moduleRow.description) ||
-    "";
-
+  const introTextSource = firstNonEmpty(
+    intro?.body_md,
+    cj?.tip,
+    cj?.lead,
+    cj?.body_md,
+    moduleRow.description
+  );
   const introTextParas = toParagraphs(introTextSource);
+  const lernzielParas = toParagraphs(firstNonEmpty(cj?.body_md, cj?.lead, intro?.body_md));
 
-  // Lernziel: bevorzugt content_json.body_md; Fallback lead
-  const lernzielParas = toParagraphs(cj.body_md || cj.lead);
+  const goals: string[] = Array.isArray(cj?.goals) && cj.goals.length
+    ? cj.goals
+    : [
+        "USP herausarbeiten",
+        "Value Proposition (1–2 Sätze) formulieren",
+        "Elevator Pitch testen & Feedback einholen",
+      ];
 
-  // Goals
-  const goals: string[] =
-    Array.isArray(cj.goals) && cj.goals.length
-      ? cj.goals
-      : [
-          "Du entwickelst ein klares Bild deiner Unternehmer-Vision.",
-          "Du verstehst, warum Visualisierung dein stärkster Motivator ist.",
-          "Du formulierst konkrete Ziele, die dich in Aktion bringen.",
-        ];
-
-  // Optionale Story
-  const storyParas = toParagraphs(cj.story?.body_md);
+  const storyParas = toParagraphs(cj?.story?.body_md);
 
   return (
     <div className="layout-3col">
@@ -194,15 +184,24 @@ export default function ModuleLayout() {
           >
             ← Zurück zur Phase
           </Link>
-          <h2 className="text-[17px] font-semibold mt-2 leading-tight">{moduleRow.title}</h2>
+          <h2 className="text-[17px] font-semibold mt-2 leading-tight">
+            {moduleRow.title}
+          </h2>
 
           <nav className="mt-3 space-y-2">
-            <Link to={`/app/modules/${moduleRow.slug}`} className="nav-item nav-item-active">
+            <Link
+              to={`/app/modules/${moduleRow.slug}`}
+              className="nav-item nav-item-active"
+            >
               <div className="font-medium">Einführungsseite & Lernziele</div>
               <div className="text-xs text-gray-500 mt-0.5">Einführung & Lernziele</div>
             </Link>
             {chapters.map((c, idx) => (
-              <Link key={c.id} to={`/app/modules/${moduleRow.slug}/lesson/${c.slug}`} className="nav-item">
+              <Link
+                key={c.id}
+                to={`/app/modules/${moduleRow.slug}/lesson/${c.slug}`}
+                className="nav-item"
+              >
                 <div className="text-[11px] opacity-60">{`Kapitel ${idx + 1}`}</div>
                 <div className="text-sm font-medium leading-tight">{c.title}</div>
               </Link>
@@ -219,9 +218,7 @@ export default function ModuleLayout() {
               <h1 className="text-[22px] font-semibold leading-tight">
                 Modul {modIndexInPhase ?? ""}: {moduleRow.title}
               </h1>
-              {phase && (
-                <div className="text-sm opacity-70">{formatPhaseLine(phase)}</div>
-              )}
+              {phase && <div className="text-sm opacity-70">{formatPhaseLine(phase)}</div>}
             </div>
             {modIndexInPhase && phaseModules.length ? (
               <div className="text-xs opacity-70 mt-1">{`Modul ${modIndexInPhase} von ${phaseModules.length}`}</div>
@@ -231,17 +228,18 @@ export default function ModuleLayout() {
           {/* Intro-Box */}
           <div className="mt-4 rounded-2xl bg-slate-100 border border-slate-200 p-5">
             <div className="font-medium mb-2">Flowmioo&apos;s Intro</div>
-            <div className="space-y-2 text-sm opacity-80">
-              {introTextParas.length
-                ? introTextParas.map((p, i) => <p key={i}>{p}</p>)
-                : <p className="italic opacity-60">Kein Introtext gefunden.</p>}
+            <div className="space-y-2 text-sm text-slate-800 opacity-90">
+              {introTextParas.length ? (
+                introTextParas.map((p, i) => <p key={i}>{p}</p>)
+              ) : (
+                <p className="italic opacity-60">Kein Introtext gefunden.</p>
+              )}
             </div>
-
-            {cj.cta && cj.story?.body_md ? (
+            {cj?.cta && cj?.story?.body_md ? (
               <div className="mt-3">
                 <button
                   onClick={() => setOpenStory(true)}
-                  className="inline-flex items-center justify-center rounded-XL px-4 py-2 font-medium shadow-sm bg-blue-600 text-white hover:bg-blue-700"
+                  className="inline-flex items-center justify-center rounded-xl px-4 py-2 font-medium shadow-sm bg-blue-600 text-white hover:bg-blue-700"
                 >
                   {cj.cta.label ?? "Geschichte lesen"}
                 </button>
@@ -252,24 +250,19 @@ export default function ModuleLayout() {
           {/* Lernziele */}
           <div className="mt-4">
             <h3 className="font-semibold mb-2">Lernziel</h3>
-
             {lernzielParas.length ? (
-              <div className="text-sm opacity-80 space-y-2">
+              <div className="text-sm text-slate-800 opacity-90 space-y-2">
                 {lernzielParas.map((p, i) => <p key={i}>{p}</p>)}
               </div>
             ) : (
-              <p className="text-sm opacity-80">
+              <p className="text-sm text-slate-800 opacity-70">
                 Kurze Beschreibung, was du nach dem Modul sicher kannst.
               </p>
             )}
-
             <div className="mt-3 grid gap-3 md:grid-cols-3">
-              {goals.map((text, i) => (
-                <CardN key={i} n={i + 1} text={text} />
-              ))}
+              {goals.map((text, i) => <CardN key={i} n={i + 1} text={text} />)}
             </div>
 
-            {/* Start / Weiter */}
             <div className="mt-6 flex justify-end">
               {firstChapter ? (
                 <Link to={`/app/modules/${moduleRow.slug}/lesson/${firstChapter.slug}`} className="btn btn-primary">
@@ -327,18 +320,12 @@ export default function ModuleLayout() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="w-full max-w-2xl max-h-[85vh] overflow-auto rounded-2xl bg-white shadow-xl">
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">{cj.story?.title ?? "Geschichte"}</h2>
-              <button
-                onClick={() => setOpenStory(false)}
-                className="px-2 py-1 rounded-lg hover:bg-slate-100"
-                aria-label="Schließen"
-              >
-                ✕
-              </button>
+              <h2 className="text-lg font-semibold">{cj?.story?.title ?? "Geschichte"}</h2>
+              <button onClick={() => setOpenStory(false)} className="px-2 py-1 rounded-lg hover:bg-slate-100" aria-label="Schließen">✕</button>
             </div>
             <div className="p-5 text-slate-800">
               <div className="space-y-3 text-[15px] leading-7">
-                {storyParas.map((p, i) => (<p key={i}>{p}</p>))}
+                {storyParas.map((p, i) => <p key={i}>{p}</p>)}
               </div>
             </div>
             <div className="p-4 border-t text-right">
@@ -351,6 +338,7 @@ export default function ModuleLayout() {
   );
 }
 
+/* ---------------- UI Bits ---------------- */
 function CardN({ n, text }: { n: number; text: string }) {
   return (
     <div className="card">
@@ -358,7 +346,7 @@ function CardN({ n, text }: { n: number; text: string }) {
         <div className="num-badge">{n}</div>
         <div className="num-underline mt-2" />
       </div>
-      <div className="text-sm opacity-80 text-center">{text}</div>
+      <div className="text-sm text-slate-800 opacity-80 text-center">{text}</div>
     </div>
   );
 }

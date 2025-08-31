@@ -1,6 +1,6 @@
 // src/routes/module/LessonPage.tsx
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import SidebarNav from "../../components/SidebarNav";
 import MultiPrompts from "../../components/MultiPrompts";
@@ -10,11 +10,14 @@ import CompareLesson, { CompareContentJson } from "../../components/lesson/Compa
 import QuizLesson, { QuizContentJson } from "../../components/lesson/QuizLesson";
 import LikertLesson, { LikertContentJson } from "../../components/lesson/LikertLesson";
 import ReframeLesson, { ReframeContentJson } from "../../components/lesson/ReframeLesson";
+import PersonaEditor from "../../components/lesson/PersonaEditor";
 
 function normalize(s?: string) {
   if (!s) return "";
   return s.replace(/\r\n/g, "\n").replace(/\\n/g, "\n").trim();
 }
+
+type ClosingRow = { title: string | null; text: string | null; cta_label: string | null };
 
 export default function LessonPage() {
   const { slug, lessonSlug } = useParams();
@@ -47,7 +50,6 @@ export default function LessonPage() {
     try {
       const { data: u } = await supabase.auth.getUser();
       if (u.user?.id) {
-        // Kapitel-Fortschritt setzen
         await supabase
           .from("user_lesson_progress")
           .upsert(
@@ -60,7 +62,6 @@ export default function LessonPage() {
             { onConflict: "user_id,lesson_id" }
           );
 
-        // 🔹 Modul-Fortschritt setzen, wenn dies das letzte Kapitel ist
         if (!nextChapter) {
           await supabase
             .from("user_module_progress")
@@ -87,6 +88,7 @@ export default function LessonPage() {
     else nav(`/app/modules/${moduleRow.slug}`);
   }
 
+  // Feature-Flags
   const hasPrompts = Array.isArray((cj as any).prompts) && (cj as any).prompts.length > 0;
   const hasCompare = Array.isArray((cj as any).compareRows) && (cj as any).compareRows.length > 0;
   const hasQuiz = !!(cj as any).quiz && Array.isArray((cj as any).quiz.options);
@@ -97,47 +99,78 @@ export default function LessonPage() {
     Array.isArray((cj as any).reframe.frames) &&
     typeof (cj as any).reframe.correct === "object";
 
-  // --- Abschluss (letztes Kapitel)
+  // Persona-Editor?
+  const hasPersonaEditor = useMemo(() => {
+    const j: any = cj || {};
+    const flag =
+      j?.personaTemplate ||
+      j?.persona_editor ||
+      j?.personaEditor ||
+      j?.template === "persona" ||
+      j?.kind === "persona";
+    const slugMatch = !!(lesson?.slug && /persona/i.test(lesson.slug));
+    return Boolean(flag || slugMatch);
+  }, [cj, lesson?.slug]);
+
+  /* ---------------- Closing (aus DB + Fallback JSON) ---------------- */
+  const [closingRow, setClosingRow] = useState<ClosingRow | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!moduleRow?.id) { setClosingRow(null); return; }
+      const { data } = await supabase
+        .from("module_closings")
+        .select("title,text,cta_label")
+        .eq("module_id", moduleRow.id)
+        .maybeSingle();
+      if (alive) setClosingRow((data as ClosingRow) ?? null);
+    })();
+    return () => { alive = false; };
+  }, [moduleRow?.id]);
+
   const closing = useMemo(() => {
     if (nextChapter) return null;
 
-    const fromCurrent: any =
-      (cj as any)?.closing ??
-      (cj as any)?.abschluss ??
-      (cj as any)?.finish ??
-      (cj as any)?.outro ??
-      (cj as any)?.closing_md;
-
-    const introJson = (intro?.content_json ?? {}) as any;
-    const fromIntro: any =
-      introJson?.closing_md ??
-      introJson?.closing ??
-      introJson?.closing_tip ??
-      introJson?.abschluss ??
-      introJson?.finish ??
-      introJson?.outro;
-
-    const src = fromCurrent ?? fromIntro;
-
-    if (!src) {
+    // 1) Bevorzugt: Tabelle module_closings
+    if (closingRow?.text && closingRow.text.trim().length > 0) {
       return {
-        title: "Abschluss des Moduls",
-        text:
-          "Super! Dieses Modul ist abgeschlossen. Nimm deinen wichtigsten Takeaway mit – und weiter geht’s.",
-        ctaLabel: null as string | null,
+        title: closingRow.title ?? "Abschluss des Moduls",
+        text: normalize(closingRow.text),
+        ctaLabel: closingRow.cta_label ?? null,
       };
     }
 
+    // 2) Fallback: Kapitel/Intro JSON
+    const pick = (arr: any[]) => arr.find((x) => x && (typeof x === "string" || typeof x === "object"));
+
+    const fromCurrent = pick([
+      (cj as any)?.closing,
+      (cj as any)?.abschluss,
+      (cj as any)?.finish,
+      (cj as any)?.outro,
+      (cj as any)?.closing_md,
+    ]);
+
+    const introJson = (intro?.content_json ?? {}) as any;
+    const fromIntro = pick([
+      introJson?.closing,
+      introJson?.abschluss,
+      introJson?.finish,
+      introJson?.outro,
+      introJson?.closing_md,
+    ]);
+
+    const src = fromCurrent ?? fromIntro;
+    if (!src) return null;
+
     if (typeof src === "string") {
-      return {
-        title: "Abschluss des Moduls",
-        text: normalize(src),
-        ctaLabel: null as string | null,
-      };
+      const text = normalize(src);
+      return text ? { title: "Abschluss des Moduls", text, ctaLabel: null as string | null } : null;
     }
 
     const title = src.title ?? "Abschluss des Moduls";
-    const body =
+    const text =
       normalize(src.body_md) ||
       normalize(src.body) ||
       normalize(src.text) ||
@@ -145,8 +178,8 @@ export default function LessonPage() {
       "";
     const ctaLabel = src?.cta?.label ?? src?.cta_label ?? null;
 
-    return { title, text: body, ctaLabel: ctaLabel as string | null };
-  }, [cj, intro?.content_json, nextChapter]);
+    return text ? { title, text, ctaLabel: ctaLabel as string | null } : null;
+  }, [closingRow, cj, intro?.content_json, nextChapter]);
 
   if (loading) return <div className="p-6">Lade Kapitel…</div>;
   if (!moduleRow || !lesson) return <div className="p-6 text-red-600">Kapitel nicht gefunden.</div>;
@@ -178,6 +211,13 @@ export default function LessonPage() {
               moduleRow={{ id: moduleRow.id, slug: moduleRow.slug, title: moduleRow.title }}
               lesson={{ id: lesson.id, slug: lesson.slug, title: lesson.title }}
               cj={cj as unknown as ReframeContentJson}
+              onNext={goNext}
+              showNext={false}
+            />
+          ) : hasPersonaEditor ? (
+            <PersonaEditor
+              moduleRow={{ id: moduleRow.id, slug: moduleRow.slug, title: moduleRow.title }}
+              lesson={{ id: lesson.id, slug: lesson.slug, title: lesson.title }}
               onNext={goNext}
               showNext={false}
             />
@@ -225,6 +265,7 @@ export default function LessonPage() {
           </div>
         </div>
 
+        {/* Abschluss-Panel: nur anzeigen, wenn aus DB/JSON Text geladen wurde */}
         {!nextChapter && closing && (
           <div className="panel">
             <h3 className="font-medium mb-2">{closing.title ?? "Abschluss des Moduls"}</h3>
