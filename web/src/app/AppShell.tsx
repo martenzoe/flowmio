@@ -1,3 +1,4 @@
+// src/app/AppShell.tsx
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
@@ -24,16 +25,27 @@ export default function AppShell({ children }: Props) {
 
   useEffect(() => {
     (async () => {
-      const [{ data: u }, { data: p }] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase.from('profiles').select('full_name').maybeSingle(),
-      ]);
+      const { data: u } = await supabase.auth.getUser();
+      const userId = u.user?.id ?? null;
 
-      const mail = u.user?.email ?? '';
-      setEmail(mail);
-      setDisplayName(p?.full_name || (u.user?.user_metadata?.full_name as string | undefined) || '');
+      setEmail(u.user?.email ?? '');
 
-      const userId = u.user?.id;
+      // 🔹 Profiles immer gefiltert auf eigene ID (RLS-stabil)
+      let profileName = '';
+      if (userId) {
+        const { data: p } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', userId)
+          .maybeSingle();
+        profileName =
+          p?.full_name ||
+          (u.user?.user_metadata?.full_name as string | undefined) ||
+          '';
+      }
+      setDisplayName(profileName);
+
+      // Token-Wallet
       if (userId) {
         const { data } = await supabase
           .from('token_wallets')
@@ -242,6 +254,7 @@ function niceTitle(path: string) {
   return p
     .replace(/^app\//, '')
     .split('/')
+    .map((s) => s.replace(/-/g, ' '))             // 🔹 hübschere Slugs
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
     .join(' · ');
 }

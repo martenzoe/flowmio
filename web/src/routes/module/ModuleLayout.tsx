@@ -6,11 +6,11 @@ import { supabase } from "../../lib/supabase";
 type Lesson = {
   id: string;
   slug: string;
-  title: string;
+  title: string | null;
   order_index: number;
-  kind: "intro" | "chapter";
+  kind: string; // tolerant: "intro" | "chapter"
   body_md: string | null;
-  content_json: any | null;
+  content_json: any | null; // object ODER string
 };
 
 type ModuleRow = {
@@ -25,24 +25,30 @@ type ModuleRow = {
 type Phase = { id: string; title: string; slug: string };
 type Ump = { module_id: string; completed: boolean | null };
 
-// Helpers
-function normalizeText(raw?: string) {
+// ---------------- Helpers ----------------
+function normalizeText(raw?: string | null) {
   if (!raw) return "";
-  // CRLF -> LF & wörtliche "\n" in echte Umbrüche
-  let s = raw.replace(/\r\n/g, "\n").replace(/\\n/g, "\n").trim();
-  // Falls jemand „Flowmioo's Intro“ in den Fließtext kopiert hat: raus damit
+  let s = String(raw).replace(/\r\n/g, "\n").replace(/\\n/g, "\n").trim();
+  // Falls jemand die Überschrift ins Feld kopiert hat: entfernen
   s = s.replace(/^\s*Flowmioo[’'`]?s Intro\s*/i, "");
   return s;
 }
-function toParagraphs(raw?: string): string[] {
+function toParagraphs(raw?: string | null): string[] {
   const s = normalizeText(raw);
   if (!s) return [];
-  return s
-    .split(/\n{2,}/) // Absätze = 2+ Umbrüche
-    .map((p) => p.replace(/\s*\n\s*/g, " ").trim()) // einzelne Umbrüche = Leerzeichen
-    .filter(Boolean);
+  return s.split(/\n{2,}/).map((p) => p.replace(/\s*\n\s*/g, " ").trim()).filter(Boolean);
+}
+function formatPhaseLine(phase?: Phase | null) {
+  if (!phase) return "";
+  const num =
+    phase.slug?.match(/\d+/)?.[0] ??
+    phase.title?.match(/\d+/)?.[0] ??
+    "";
+  const title = (phase.title ?? "").replace(/^PHASE\s*\d+\s*:\s*/i, "").trim();
+  return `PHASE ${num}: ${title}`;
 }
 
+// ---------------- Component ----------------
 export default function ModuleLayout() {
   const { slug } = useParams();
   const [moduleRow, setModuleRow] = useState<ModuleRow | null>(null);
@@ -65,7 +71,7 @@ export default function ModuleLayout() {
         .eq("slug", slug)
         .maybeSingle();
       if (!alive) return;
-      if (!mod) return setLoading(false);
+      if (!mod) { setLoading(false); return; }
       setModuleRow(mod as ModuleRow);
 
       // Phase
@@ -84,7 +90,7 @@ export default function ModuleLayout() {
         .order("order_index", { ascending: true });
       if (alive) setPhaseModules((pMods ?? []) as ModuleRow[]);
 
-      // Lessons (mit content_json!)
+      // Lessons (Intro & Kapitel)
       const { data: ls } = await supabase
         .from("module_lessons")
         .select("id,slug,title,order_index,kind,body_md,content_json")
@@ -94,7 +100,7 @@ export default function ModuleLayout() {
 
       // Progress
       const { data: u } = await supabase.auth.getUser();
-      if (u.user?.id && pMods?.length) {
+      if (u?.user?.id && pMods?.length) {
         const { data: ump } = await supabase
           .from("user_module_progress")
           .select("module_id, completed")
@@ -107,44 +113,74 @@ export default function ModuleLayout() {
 
       if (alive) setLoading(false);
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [slug]);
 
-  const intro = useMemo(() => lessons.find((l) => l.kind === "intro") ?? null, [lessons]);
-  const chapters = useMemo(() => lessons.filter((l) => l.kind === "chapter"), [lessons]);
+  // ---------- Hooks (immer vor Early-Returns!) ----------
+  // Intro robust finden
+  const intro = useMemo(() => {
+    if (!lessons.length) return null;
+    // 1) bevorzugt "einleitung"
+    const bySlug = lessons.find((l) => (l.slug ?? "").trim().toLowerCase() === "einleitung");
+    if (bySlug) return bySlug;
+    // 2) sonst kind === intro
+    const byKind = lessons.find((l) => (l.kind ?? "").toString().trim().toLowerCase() === "intro");
+    return byKind ?? null;
+  }, [lessons]);
+
+  // Kapitel
+  const chapters = useMemo(
+    () => lessons.filter((l) => (l.kind ?? "").toString().trim().toLowerCase() === "chapter"),
+    [lessons]
+  );
   const firstChapter = useMemo(() => (chapters.length ? chapters[0] : null), [chapters]);
 
+  // Modulindex in Phase
   const modIndexInPhase = useMemo(() => {
     if (!moduleRow || !phaseModules.length) return null;
     const idx = phaseModules.findIndex((m) => m.id === moduleRow.id);
     return idx >= 0 ? idx + 1 : null;
   }, [moduleRow, phaseModules]);
 
+  // content_json sicher parsen
+  const cj = useMemo(() => {
+    const raw = intro?.content_json;
+    if (!raw) return {} as any;
+    if (typeof raw === "string") {
+      try { return JSON.parse(raw); } catch { return {}; }
+    }
+    return (raw ?? {}) as any;
+  }, [intro]);
+
+  // ---------- Early-Returns ----------
   if (loading) return <div className="p-6">Lade Modul…</div>;
   if (!moduleRow) return <div className="p-6 text-red-600">Modul nicht gefunden.</div>;
 
-  // ---- Intro-Inhalt
-  const cj = (intro?.content_json ?? {}) as {
-    lead?: string;
-    body_md?: string; // ★ Lernziel-Text kommt aus body_md in content_json
-    tip?: string;
-    goals?: string[];
-    cta?: { label?: string };
-    story?: { title?: string; body_md?: string };
-  };
-
-  // Flowmioo-Intro: body_md Spalte des *Lesson*-Records (falls genutzt) hat Vorrang,
-  // sonst tip aus content_json
+  // ---------- Inhalte ----------
+  // Flowmioo's Intro: body_md → tip → lead → modul.description
   const introTextSource =
-    intro?.body_md && intro.body_md.trim().length > 0
-      ? intro.body_md
-      : cj.tip ?? "In diesem Modul arbeitest du fokussiert an einem klaren Schritt.";
+    normalizeText(intro?.body_md) ||
+    normalizeText(cj.tip) ||
+    normalizeText(cj.lead) ||
+    normalizeText(moduleRow.description) ||
+    "";
+
   const introTextParas = toParagraphs(introTextSource);
 
-  // ★ Lernziel-Absatz(e): erst content_json.body_md, sonst fallback auf lead
-  const lernzielParas = toParagraphs(cj.body_md ?? cj.lead);
+  // Lernziel: bevorzugt content_json.body_md; Fallback lead
+  const lernzielParas = toParagraphs(cj.body_md || cj.lead);
+
+  // Goals
+  const goals: string[] =
+    Array.isArray(cj.goals) && cj.goals.length
+      ? cj.goals
+      : [
+          "Du entwickelst ein klares Bild deiner Unternehmer-Vision.",
+          "Du verstehst, warum Visualisierung dein stärkster Motivator ist.",
+          "Du formulierst konkrete Ziele, die dich in Aktion bringen.",
+        ];
+
+  // Optionale Story
   const storyParas = toParagraphs(cj.story?.body_md);
 
   return (
@@ -163,7 +199,7 @@ export default function ModuleLayout() {
           <nav className="mt-3 space-y-2">
             <Link to={`/app/modules/${moduleRow.slug}`} className="nav-item nav-item-active">
               <div className="font-medium">Einführungsseite & Lernziele</div>
-              {intro?.title && <div className="text-xs text-gray-500 mt-0.5">{intro.title}</div>}
+              <div className="text-xs text-gray-500 mt-0.5">Einführung & Lernziele</div>
             </Link>
             {chapters.map((c, idx) => (
               <Link key={c.id} to={`/app/modules/${moduleRow.slug}/lesson/${c.slug}`} className="nav-item">
@@ -184,9 +220,7 @@ export default function ModuleLayout() {
                 Modul {modIndexInPhase ?? ""}: {moduleRow.title}
               </h1>
               {phase && (
-                <div className="text-sm opacity-70">
-                  {`PHASE ${phaseTitlePrefix(phase.slug)}: ${phase.title}`}
-                </div>
+                <div className="text-sm opacity-70">{formatPhaseLine(phase)}</div>
               )}
             </div>
             {modIndexInPhase && phaseModules.length ? (
@@ -198,10 +232,11 @@ export default function ModuleLayout() {
           <div className="mt-4 rounded-2xl bg-slate-100 border border-slate-200 p-5">
             <div className="font-medium mb-2">Flowmioo&apos;s Intro</div>
             <div className="space-y-2 text-sm opacity-80">
-              {introTextParas.map((p, i) => (
-                <p key={i}>{p}</p>
-              ))}
+              {introTextParas.length
+                ? introTextParas.map((p, i) => <p key={i}>{p}</p>)
+                : <p className="italic opacity-60">Kein Introtext gefunden.</p>}
             </div>
+
             {cj.cta && cj.story?.body_md ? (
               <div className="mt-3">
                 <button
@@ -218,12 +253,9 @@ export default function ModuleLayout() {
           <div className="mt-4">
             <h3 className="font-semibold mb-2">Lernziel</h3>
 
-            {/* ★ body_md (mehrzeilig) sauber ausgeben; Fallback-Text wenn leer */}
             {lernzielParas.length ? (
               <div className="text-sm opacity-80 space-y-2">
-                {lernzielParas.map((p, i) => (
-                  <p key={i}>{p}</p>
-                ))}
+                {lernzielParas.map((p, i) => <p key={i}>{p}</p>)}
               </div>
             ) : (
               <p className="text-sm opacity-80">
@@ -232,14 +264,7 @@ export default function ModuleLayout() {
             )}
 
             <div className="mt-3 grid gap-3 md:grid-cols-3">
-              {(cj.goals?.length
-                ? cj.goals
-                : [
-                    "Du entwickelst ein klares Bild deiner Unternehmer-Vision.",
-                    "Du verstehst, warum Visualisierung dein stärkster Motivator ist.",
-                    "Du formulierst konkrete Ziele, die dich in Aktion bringen.",
-                  ]
-              ).map((text, i) => (
+              {goals.map((text, i) => (
                 <CardN key={i} n={i + 1} text={text} />
               ))}
             </div>
@@ -264,9 +289,7 @@ export default function ModuleLayout() {
           <h3 className="font-medium">Flowmioo-Tipps</h3>
           <div className="mt-3 space-y-2">
             {getTipsForModule(moduleRow.slug).map((t, i) => (
-              <div key={i} className="tip">
-                {t}
-              </div>
+              <div key={i} className="tip">{t}</div>
             ))}
           </div>
         </div>
@@ -315,15 +338,11 @@ export default function ModuleLayout() {
             </div>
             <div className="p-5 text-slate-800">
               <div className="space-y-3 text-[15px] leading-7">
-                {storyParas.map((p, i) => (
-                  <p key={i}>{p}</p>
-                ))}
+                {storyParas.map((p, i) => (<p key={i}>{p}</p>))}
               </div>
             </div>
             <div className="p-4 border-t text-right">
-              <button onClick={() => setOpenStory(false)} className="btn btn-primary">
-                Schließen
-              </button>
+              <button onClick={() => setOpenStory(false)} className="btn btn-primary">Schließen</button>
             </div>
           </div>
         </div>
@@ -342,12 +361,6 @@ function CardN({ n, text }: { n: number; text: string }) {
       <div className="text-sm opacity-80 text-center">{text}</div>
     </div>
   );
-}
-
-function phaseTitlePrefix(slug?: string | null) {
-  if (!slug) return "";
-  const m = slug.match(/(\d+)/);
-  return m ? m[1] : "";
 }
 
 function getTipsForModule(moduleSlug: string) {
