@@ -11,6 +11,14 @@ import QuizLesson, { QuizContentJson } from "../../components/lesson/QuizLesson"
 import LikertLesson, { LikertContentJson } from "../../components/lesson/LikertLesson";
 import ReframeLesson, { ReframeContentJson } from "../../components/lesson/ReframeLesson";
 import PersonaEditor from "../../components/lesson/PersonaEditor";
+import ValuesLesson, { ValuesContentJson } from "../../components/lesson/ValuesLesson";
+import CardSelectLesson, { CardSelectContentJson } from "../../components/lesson/CardSelectLesson";
+import RevenueSourcesLesson, {
+  RevenueSourcesContentJson,
+} from "../../components/lesson/RevenueSourcesLesson";
+import WeeklyPlanLesson, {
+  WeeklyPlanContentJson,
+} from "../../components/lesson/WeeklyPlanLesson";
 
 function normalize(s?: string) {
   if (!s) return "";
@@ -88,7 +96,7 @@ export default function LessonPage() {
     else nav(`/app/modules/${moduleRow.slug}`);
   }
 
-  // Feature-Flags
+  // Feature-Flags (stabil & defensiv)
   const hasPrompts = Array.isArray((cj as any).prompts) && (cj as any).prompts.length > 0;
   const hasCompare = Array.isArray((cj as any).compareRows) && (cj as any).compareRows.length > 0;
   const hasQuiz = !!(cj as any).quiz && Array.isArray((cj as any).quiz.options);
@@ -99,7 +107,28 @@ export default function LessonPage() {
     Array.isArray((cj as any).reframe.frames) &&
     typeof (cj as any).reframe.correct === "object";
 
-  // Persona-Editor?
+  const hasValues = useMemo(() => {
+    const j: any = cj || {};
+    return Boolean(j?.template === "values" || j?.values);
+  }, [cj]);
+
+  const hasCardSelect = useMemo(() => {
+    const j: any = cj || {};
+    return Boolean(j?.cardSelect && Array.isArray(j.cardSelect.cards));
+  }, [cj]);
+
+  // Einnahmequellen-Lesson
+  const hasRevenueSources = useMemo(() => {
+    const j: any = cj || {};
+    return Boolean(j?.revenueSources || j?.template === "revenue-sources");
+  }, [cj]);
+
+  // Weekly-Plan-Lesson (4 Wochen Planer)
+  const hasWeeklyPlan = useMemo(() => {
+    const j: any = cj || {};
+    return Boolean(j?.weeklyPlan || j?.template === "weekly-plan");
+  }, [cj]);
+
   const hasPersonaEditor = useMemo(() => {
     const j: any = cj || {};
     const flag =
@@ -132,7 +161,6 @@ export default function LessonPage() {
   const closing = useMemo(() => {
     if (nextChapter) return null;
 
-    // 1) Bevorzugt: Tabelle module_closings
     if (closingRow?.text && closingRow.text.trim().length > 0) {
       return {
         title: closingRow.title ?? "Abschluss des Moduls",
@@ -141,7 +169,6 @@ export default function LessonPage() {
       };
     }
 
-    // 2) Fallback: Kapitel/Intro JSON
     const pick = (arr: any[]) => arr.find((x) => x && (typeof x === "string" || typeof x === "object"));
 
     const fromCurrent = pick([
@@ -199,7 +226,15 @@ export default function LessonPage() {
         <div className="panel">
           <h1 className="text-[22px] font-semibold leading-tight">{lesson.title}</h1>
 
-          {hasLikert ? (
+          {hasValues ? (
+            <ValuesLesson
+              moduleRow={{ id: moduleRow.id, slug: moduleRow.slug, title: moduleRow.title }}
+              lesson={{ id: lesson.id, slug: lesson.slug, title: lesson.title }}
+              cj={cj as unknown as ValuesContentJson}
+              onNext={goNext}
+              showNext={false}
+            />
+          ) : hasLikert ? (
             <LikertLesson
               moduleRow={{ id: moduleRow.id, slug: moduleRow.slug, title: moduleRow.title }}
               lesson={{ id: lesson.id, slug: lesson.slug, title: lesson.title }}
@@ -214,10 +249,34 @@ export default function LessonPage() {
               onNext={goNext}
               showNext={false}
             />
+          ) : hasRevenueSources ? (
+            <RevenueSourcesLesson
+              moduleRow={{ id: moduleRow.id, slug: moduleRow.slug, title: moduleRow.title }}
+              lesson={{ id: lesson.id, slug: lesson.slug, title: lesson.title }}
+              cj={cj as unknown as RevenueSourcesContentJson}
+              onNext={goNext}
+              showNext={false}
+            />
+          ) : hasWeeklyPlan ? (
+            <WeeklyPlanLesson
+              moduleRow={{ id: moduleRow.id, slug: moduleRow.slug, title: moduleRow.title }}
+              lesson={{ id: lesson.id, slug: lesson.slug, title: lesson.title }}
+              cj={cj as unknown as WeeklyPlanContentJson}
+              onNext={goNext}
+              showNext={false}
+            />
           ) : hasPersonaEditor ? (
             <PersonaEditor
               moduleRow={{ id: moduleRow.id, slug: moduleRow.slug, title: moduleRow.title }}
               lesson={{ id: lesson.id, slug: lesson.slug, title: lesson.title }}
+              onNext={goNext}
+              showNext={false}
+            />
+          ) : hasCardSelect ? (
+            <CardSelectLesson
+              moduleRow={{ id: moduleRow.id, slug: moduleRow.slug, title: moduleRow.title }}
+              lesson={{ id: lesson.id, slug: lesson.slug, title: lesson.title }}
+              cj={cj as unknown as CardSelectContentJson}
               onNext={goNext}
               showNext={false}
             />
